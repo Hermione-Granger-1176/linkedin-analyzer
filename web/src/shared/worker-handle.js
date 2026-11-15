@@ -64,8 +64,7 @@ export function createWorkerHandle(options) {
         terminate() {
             unwatch();
             if (worker) {
-                // Detached as well as terminated, so the handlers, and whatever
-                // they close over, are not kept alive by the dead worker.
+                // Listeners are removed before the worker is terminated.
                 worker.removeEventListener("message", onMessage);
                 worker.removeEventListener("error", onError);
                 worker.removeEventListener("messageerror", onError);

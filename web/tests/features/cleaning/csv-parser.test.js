@@ -11,8 +11,8 @@ import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 
 describe("parseCsvRows input-size guard", () => {
     it("rejects input longer than the character limit", () => {
-        // Pass a length-bearing object so the guard trips without allocating a
-        // multi-megabyte string (the early return never scans the characters).
+        // Passes an object with a length property, so the guard trips without
+        // allocating a large string.
         const { rows, error } = parseCsvRows({ length: MAX_CSV_CHARS + 1 });
         expect(rows).toEqual([]);
         expect(error).toMatch(/parser limit/);
@@ -95,9 +95,8 @@ describe("parseCsvRows carriage-return handling inside quotes", () => {
 
 describe("parseCsvRows field-size guard for mid-field quotes", () => {
     it("rejects an unquoted field that overflows just as a mid-field quote arrives", () => {
-        // Build a field exactly at the limit, then a mid-field quote: the bulk
-        // copy fills the field to the cap, and the following lone quote trips
-        // the per-character overflow guard.
+        // A field exactly at the limit, followed by a mid-field quote. The quote
+        // trips the per-character overflow guard.
         const atLimit = "x".repeat(200000);
         const { rows, error } = parseCsvRows(`${atLimit}"y`, CSV_OPTIONS_DEFAULT);
         expect(rows).toEqual([]);
@@ -117,9 +116,8 @@ describe("parseCsvRows field-size guard inside quoted fields", () => {
     });
 
     it("rejects a carriage return that would overflow the field cap", () => {
-        // Quoted field already at the cap, then a bare CR whose literal append
-        // would exceed the limit (the per-character overflow guard fires before
-        // the CR-handling branch).
+        // Quoted field already at the cap, then a bare CR. The per-character
+        // overflow guard fires before the CR-handling branch.
         const { rows, error } = parseCsvRows(`"${atLimit}\r`, CSV_OPTIONS_DEFAULT);
         expect(rows).toEqual([]);
         expect(error).toMatch(/too large/i);

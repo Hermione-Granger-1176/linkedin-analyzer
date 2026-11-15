@@ -2,8 +2,8 @@
  * Read and clean one CSV source for a worker.
  *
  * Stream File and Blob sources when streaming is available. If streaming
- * cannot finish as the requested type, read the source as one string. Use the
- * whole-text cleaner so results and error messages match.
+ * cannot finish as the requested type, read the source as one string and clean
+ * it with the whole-text cleaner.
  */
 
 import { toCsvSource } from "../../shared/csv-source.js";

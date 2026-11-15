@@ -5,10 +5,9 @@ const { expect, test } = require("@playwright/test");
 
 const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
 
-// Synthetic comments export with known cleaned outputs: a plain row, four
-// formula-injection payloads (= + - @), and a row whose message carries an
-// XML-illegal control character. The Python validator asserts the workbook
-// internals; this spec only proves the real browser produces and saves the file.
+// Synthetic comments export: a plain row, four formula-injection payloads (= + - @),
+// and a row with an XML-illegal control character. The Python validator checks the
+// workbook internals. This spec checks that the browser produces and saves the file.
 const FIXTURE = path.join(__dirname, "fixtures", "BrowserXlsx.csv");
 
 test.beforeEach(async ({ page }) => {
@@ -33,9 +32,8 @@ test("browser generates and downloads a real comments xlsx workbook", async ({
     const download = await downloadPromise;
     expect(download.suggestedFilename().toLowerCase()).toContain("comments");
 
-    // The Make target points BROWSER_XLSX_OUT at a private temp file it later
-    // validates and removes. Without it, fall back to a per-test, per-project
-    // output path so a direct `make test-e2e` run cannot collide across browsers.
+    // BROWSER_XLSX_OUT is a temp file that the Make target validates and removes.
+    // Without it, a per-test, per-project path is used.
     const outputPath = process.env.BROWSER_XLSX_OUT || testInfo.outputPath("Comments.xlsx");
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     await download.saveAs(outputPath);

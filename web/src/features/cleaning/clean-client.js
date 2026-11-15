@@ -18,7 +18,7 @@ import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { resetCleanJob, runCleanJob } from "./clean-job.js";
 
-// Fixed text: a failure inside the worker can carry a row of the user's file.
+// Fixed text only. Worker failures can carry rows of the user's file.
 const CLEAN_FAILURE = "Unable to parse file.";
 const CLEAN_TIMEOUT = "Cleaning took too long. Try again.";
 const MAIN_THREAD_TOO_LARGE =
@@ -88,8 +88,7 @@ function onMessage(event) {
         return;
     }
     const { requestId, payload } = parsed.value;
-    // A global failure in the worker is answered under id 0 rather than under
-    // a request; only one request is ever in flight, so it is this one's.
+    // A global failure is answered under id 0. It settles the request in flight.
     if (requestId === GLOBAL_FAILURE_ID && !payload.success) {
         failWorker();
         return;
@@ -106,7 +105,7 @@ function onMessage(event) {
  * @param {Event} event - Worker error or messageerror event
  */
 function onError(event) {
-    // Handled here; keep the browser from also logging it as uncaught.
+    // Stops the browser from also logging the event as uncaught.
     event.preventDefault();
     failWorker();
 }
@@ -127,9 +126,9 @@ function cancelled() {
 
 /**
  * Run the job on the main thread, reporting a fixed error if it throws. A file
- * above the main-thread limit is refused rather than risk freezing the tab. A
- * run that a newer request or a Clear overtook reports cancelled, and one that
- * outlived a Clear drops the rows it kept.
+ * above the main-thread limit is refused. A run that a newer request or a Clear
+ * overtook reports cancelled, and one that outlived a Clear drops the rows it
+ * kept.
  * @param {CleaningRequestPayload} payload - Request payload
  * @returns {Promise<CleanReply>}
  */
@@ -167,14 +166,14 @@ export function requestClean(payload) {
         return runOnMainThread(payload);
     }
     if (pending) {
-        // The worker may still be busy with the abandoned job; a fresh one
-        // starts on this request instead of waiting behind it.
+        // Terminates the worker so a fresh one starts on this request instead of
+        // waiting behind the abandoned job.
         terminateCleanWorker(cancelled());
         return requestClean(payload);
     }
     const id = ++requestCount;
     return new Promise((resolve) => {
-        // A workbook takes longer than a clean, so a download gets twice the budget.
+        // Downloads get twice the budget of a preview.
         const budget =
             computeWorkerTimeout(payload.source) * (payload.output === "preview" ? 1 : 2);
         pending = { id, resolve };
@@ -193,7 +192,7 @@ export function requestClean(payload) {
     });
 }
 
-// Clearing stored data must not leave the last file's cleaned rows in memory.
+// Clearing stored data also drops the last file's cleaned rows from memory.
 DataCache.subscribe((event) => {
     const type = /** @type {{type?: string}|null} */ (event)?.type;
     if (type === "storageCleared") {

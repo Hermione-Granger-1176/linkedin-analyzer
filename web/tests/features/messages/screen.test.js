@@ -40,8 +40,7 @@ vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: { process: vi.fn() },
 }));
 
-// The main-thread fallback decodes the stored upload; the cleaner is mocked, so
-// a stand-in that answers on the next microtask keeps the tests' timing.
+// Stub for the upload reader: resolves to "csv" for a present source and "" otherwise.
 vi.mock("../../../src/features/upload/read.js", () => ({
     readCsvSource: vi.fn(async (source) => (source ? "csv" : "")),
     readOptionalCsvSource: vi.fn(async (source) => ({ text: source ? "csv" : "", failed: false })),
@@ -231,11 +230,8 @@ describe("MessagesPage", () => {
         ({ LinkedInCleaner } = await import("../../../src/features/cleaning/cleaner.js"));
         ({ MessagesAnalytics } = await import("../../../src/features/messages/analytics.js"));
 
-        // Since vi.mock() creates module-level singletons that persist across
-        // vi.resetModules() calls, we must manually reset all mock state here so
-        // that mockReturnValue / mockResolvedValue overrides from previous tests
-        // (including tests that call vi.resetModules() internally) do not bleed
-        // through to subsequent tests.
+        // vi.mock() singletons survive vi.resetModules(), so each mock's state is
+        // reset here. Overrides set by earlier tests do not carry into later ones.
         DataCache._values.clear();
         DataCache.get.mockReset();
         DataCache.get.mockImplementation((key) => DataCache._values.get(key));
@@ -265,8 +261,8 @@ describe("MessagesPage", () => {
                 .toLowerCase(),
         );
 
-        // Ensure a clean default for every test, tests that need specific files
-        // override this before calling onRouteChange / loadData.
+        // Sets a clean default for every test. Tests that need specific files
+        // override it before calling onRouteChange / loadData.
         Storage.getAllFiles.mockReset();
         Storage.getAllFiles.mockResolvedValue([]);
         // loadData loads the messages/connections text on demand (caches hold
@@ -1036,7 +1032,7 @@ describe("MessagesPage", () => {
         // "all" is a valid range value, no button should show active for "all"
         MessagesPage.onRouteChange({ range: "all" });
         await tick();
-        // Without a messages file the page shows the empty state (that's correct)
+        // Without a messages file, the page shows the empty state
         expect(document.getElementById("messagesEmpty").hidden).toBe(false);
         // None of the range buttons should be marked active for "all"
         const activeBtn = document.querySelector("[data-range].active");
@@ -1113,8 +1109,8 @@ describe("MessagesPage", () => {
 
         AppRouter.setParams.mockClear();
         const select = document.getElementById("messagesTimeRangeSelect");
-        // A stray option with odd casing must normalize to the canonical range
-        // rather than leaking mixed case into state and the router.
+        // A cased option value is normalized to the canonical range before it
+        // reaches state and the router.
         select.insertAdjacentHTML("beforeend", '<option value="3M">3 months</option>');
         select.value = "3M";
         select.dispatchEvent(new Event("change"));
@@ -1820,7 +1816,7 @@ describe("MessagesPage", () => {
         const tipText = document.getElementById("messagesTipText").textContent;
         expect(tipText).toContain("Top Guy");
         expect(tipText).toContain("Old Pal");
-        // Pip speaks the tip, so the copy stays first person.
+        // The tip copy is written in Pip's first-person voice.
         expect(tipText).toContain("I would say hello");
     });
 
@@ -1933,7 +1929,7 @@ describe("MessagesPage", () => {
         await tick();
 
         const tipText = document.getElementById("messagesTipText").textContent;
-        // One connection, so the noun is singular.
+        // A single connection uses the singular noun.
         expect(tipText).toContain("I count 1 silent connection.");
     });
 
@@ -2287,9 +2283,8 @@ describe("MessagesPage", () => {
 
         const timestamp = new Date("2024-01-01").getTime();
 
-        // DataCache._values is empty (cleared in beforeEach), so DataCache.get()
-        // returns undefined (falsy) for all keys, which causes loadData() to call
-        // Storage.getAllFiles, no need for a blanket mockReturnValue(null) override.
+        // DataCache is empty here (cleared in beforeEach), so DataCache.get()
+        // returns undefined and loadData() calls Storage.getAllFiles.
 
         Storage.getAllFiles.mockResolvedValue([
             { type: "messages", name: "connerr.csv", blob: new Blob(["csv"]), updatedAt: 220, rowCount: 1 },
@@ -2409,8 +2404,7 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
         await tick();
 
-        // The connections file metadata is present, so missing text is reported
-        // as a load error rather than silently dropping connection insights.
+        // With connections metadata present, missing text is reported as a load error.
         expect(document.getElementById("silentConnectionsList").innerHTML).toContain(
             "Unable to load Connections.csv",
         );
@@ -2428,7 +2422,7 @@ describe("MessagesPage", () => {
         ({ AppRouter } = await import("../../../src/app/router.js"));
         ({ Storage } = await import("../../../src/platform/persistence/storage.js"));
 
-        // Use a fixed "latest" date of 2024-06-15 so range calculation is deterministic.
+        // A fixed "latest" date of 2024-06-15 keeps the range calculation deterministic.
         // getRangeStart('1m', latestTs) returns the first day of the month 0 months back,
         // i.e. 2024-06-01 00:00:00.
         // A recent event on 2024-06-10 is inside 1m.
@@ -2747,7 +2741,7 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
         await tick();
 
-        // Send a message with wrong requestId, should be silently ignored
+        // A message with a mismatched requestId is ignored.
         if (workerMsgHandler) {
             workerMsgHandler({
                 data: {
@@ -2759,8 +2753,7 @@ describe("MessagesPage", () => {
         }
 
         await tick();
-        // Still in loading/empty state since the wrong ID was ignored
-        // No throw = pass
+        // The page stays in its current state, and nothing throws.
     });
 
 
@@ -2769,8 +2762,8 @@ describe("MessagesPage", () => {
         document.body.innerHTML = "";
         vi.resetModules();
         const { MessagesPage: MI } = await import("../../../src/features/messages/screen.js");
-        // onRouteChange should call init() which returns early due to missing elements,
-        // and then onRouteChange itself returns early, no exception should be thrown.
+        // init() returns early when elements are missing, and onRouteChange then
+        // returns early without throwing.
         MI.onRouteChange({});
 
     });
@@ -3107,7 +3100,7 @@ describe("MessagesPage", () => {
     });
 
 
-    // Additional branch coverage: worker plumbing, hydration fallbacks, exports
+    // Worker plumbing, hydration fallbacks, and exports
 
 
     /** Build a fully-populated hydrated messageState payload for one contact. */

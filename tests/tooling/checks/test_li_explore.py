@@ -1,8 +1,8 @@
 """Tests for the ad-hoc export explorer behind `make explore`.
 
-The explorer reads its export path when it is imported, so every test loads it
-from its real path with a redirected repository root. It then reads a synthetic
-export from ``tmp_path`` instead of the private one in ``data/input``.
+The explorer resolves its export path at import time. Each test loads it from its
+real path with a redirected repository root, then reads a synthetic export from
+``tmp_path`` instead of the private one in ``data/input``.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     import pytest
 
 MODULE_PATH = Path(__file__).parents[3] / "scripts" / "checks" / "li_explore.py"
-# Bound before any test can patch it: the explorer raises the csv field-size
-# limit process-wide, and that must not leak into the rest of the suite.
+# Captured at import so tests can restore the process-wide csv field-size limit
+# that the explorer raises.
 SET_FIELD_SIZE_LIMIT = csv.field_size_limit
 OWNER = "Test Owner"
 

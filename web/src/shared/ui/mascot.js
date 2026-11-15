@@ -37,8 +37,7 @@ function spawnSplat(event, button) {
     splat.className = "pip-splat";
     splat.setAttribute("aria-hidden", "true");
     splat.innerHTML = `<svg viewBox="0 0 26 26"><path d="${SPLAT_PATH}"></path></svg>`;
-    // Keyboard clicks report coordinates 0,0. Center the splat on the button
-    // because those clicks have no pointer position.
+    // Keyboard clicks (detail 0) report coordinates 0,0, so the splat is centered.
     const fromKeyboard = event.detail === 0;
     const x = fromKeyboard ? rect.width / 2 : event.clientX - rect.left;
     const y = fromKeyboard ? rect.height / 2 : event.clientY - rect.top;
@@ -97,8 +96,7 @@ function playMoment(moment) {
             previousTimer: momentTimers.get(id),
             apply: () => pose.classList.add(activeClass),
             reset: () => pose.classList.remove(activeClass),
-            // Clear the stored timer ID after it fires so a later call cannot
-            // cancel a timer that reuses that ID.
+            // Forgets the timer ID once it fires.
             done: () => momentTimers.delete(id),
         }),
     );
@@ -123,9 +121,9 @@ export function celebrateStaple() {
 }
 
 /**
- * Rub the Files card clean, then put Pip away. Driven by the storage event
- * rather than by the button, so the sweep only ever follows a wipe that went
- * through: a clear that failed leaves its own message in the card instead.
+ * Rub the Files card clean, then put Pip away. Driven by the storage-cleared
+ * event, not by the button, so the sweep follows only a completed wipe. A failed
+ * clear shows its own message in the card.
  * @returns {void}
  */
 function celebrateClear() {
@@ -134,8 +132,7 @@ function celebrateClear() {
 
 /**
  * Bind the mascot's event-driven decoration for the life of the page. Binding
- * is one-shot: a second call would leave two splats behind every click, and two
- * eraser sweeps behind every wipe.
+ * is one-shot; later calls do nothing.
  * @returns {void}
  */
 export function initMascot() {
@@ -145,7 +142,7 @@ export function initMascot() {
     initialized = true;
     document.addEventListener("click", handleClick);
     // Start the eraser animation after storage announces a completed clear.
-    // The notifier handles listener failures so decoration cannot fail the clear.
+    // The notifier catches listener errors.
     DataCache.subscribe((/** @type {{type?: unknown}} */ event) => {
         if (event.type === STORAGE_CLEARED) {
             celebrateClear();

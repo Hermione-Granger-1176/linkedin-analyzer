@@ -11,7 +11,7 @@ make setup
 make install-hooks
 ```
 
-Read [development](../docs/development.md) for browser setup, dependency changes, local diagnostics, and GitHub helpers.
+Read [development](../docs/development.md) for browser setup, dependency changes, and local diagnostics, and [GitHub helpers](../docs/github-helpers.md) for PR and review commands.
 
 ## Create a branch
 
@@ -43,11 +43,11 @@ Run the full non-browser gate before review:
 make ci
 ```
 
-Run `make check` when the change affects browser behavior, browser files, or the Playwright suite. Read [testing](../docs/testing.md) for coverage, parity, browser runtime, and benchmark checks.
+Run `make check` when the change affects browser behavior, browser files, or the Playwright suite. Read [testing](../docs/testing.md) for coverage, parity, and browser checks, and [benchmarks](../docs/benchmarks.md) for performance checks.
 
 ## Update documentation
 
-Use [the documentation index](../docs/index.md) to choose the page. Put user actions in a how-to or tutorial, facts in a reference, and design reasons in an explanation. Keep Markdown paragraphs on one line and align tables with `make align-tables`.
+Use [the documentation index](../docs/index.md) to choose the page. Put user actions in a how-to or tutorial and facts in a reference. Describe the current system only. History and design rationale go in an [ADR](../docs/adr/README.md). Keep Markdown paragraphs on one line and align tables with `make align-tables`.
 
 Run these checks after documentation changes:
 

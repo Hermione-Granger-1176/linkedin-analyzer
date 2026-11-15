@@ -95,8 +95,7 @@ export const Session = (() => {
 
         await Storage.clearAll();
         DataCache.clear();
-        // Record that data was wiped so the next screen can show a one-time
-        // notice instead of the data silently disappearing.
+        // Records that data was wiped so the next screen can show a one-time notice.
         setStorageValue(EXPIRY_NOTICE_KEY, "1");
 
         touch();

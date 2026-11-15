@@ -33,7 +33,7 @@ def test_discovery_reads_schedule_structure(tmp_path):
 
 
 def test_invalid_workflow_yaml_is_check_failure(tmp_path):
-    """A parse failure cannot silently exclude a disabled workflow."""
+    """A YAML parse failure raises GhError."""
     (tmp_path / "broken.yml").write_text("on: [\n")
     with pytest.raises(GhError, match=r"Cannot parse workflow broken\.yml"):
         schedule_watchdog.scheduled_workflow_files(tmp_path)
@@ -41,7 +41,7 @@ def test_invalid_workflow_yaml_is_check_failure(tmp_path):
 
 @pytest.mark.parametrize("payload", [None, [], {}, {"state": None}, {"state": ""}, {"state": 1}])
 def test_unreadable_metadata_is_check_failure(payload, monkeypatch):
-    """Unreadable metadata cannot produce a healthy verdict."""
+    """Metadata without a usable state raises GhError."""
     monkeypatch.setattr(schedule_watchdog.gh_runner, "gh_json", lambda *_args, **_kwargs: payload)
     with pytest.raises(GhError, match="metadata"):
         schedule_watchdog.fetch_workflow_state(
@@ -53,7 +53,7 @@ def test_unreadable_metadata_is_check_failure(payload, monkeypatch):
     "state", ["active", "disabled_inactivity", "disabled_manually", "disabled_fork"]
 )
 def test_only_enabled_state_matters(state, monkeypatch):
-    """The check never requests run history, even when timestamps look old."""
+    """Only the workflow state is requested, not run history."""
     calls = []
 
     def respond(args, *, run_fn):
@@ -100,7 +100,7 @@ def test_checked_output_optional(env):
 
 
 def test_checked_output_appends(tmp_path, monkeypatch):
-    """Preserve other step outputs while recording the verdict."""
+    """Appends the verdict to existing GITHUB_OUTPUT content."""
     output = tmp_path / "output"
     output.write_text("previous=value\n")
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
@@ -111,7 +111,7 @@ def test_checked_output_appends(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("problems, expected", [([], 0), (["smoke.yml: disabled_manually"], 1)])
 def test_cli_verdict(monkeypatch, tmp_path, capsys, problems, expected):
-    """Healthy and disabled states both report a completed check."""
+    """Writes checked=true for both a healthy and a disabled result."""
     output = tmp_path / "output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
 
@@ -128,7 +128,7 @@ def test_cli_verdict(monkeypatch, tmp_path, capsys, problems, expected):
 
 @pytest.mark.parametrize("error", [GhError("API unavailable"), OSError("unreadable YAML")])
 def test_cli_failure_does_not_report_disabled_workflow(monkeypatch, tmp_path, capsys, error):
-    """API and filesystem failures route to setup alerts."""
+    """API and filesystem failures exit 2 and write checked=false."""
     output = tmp_path / "output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
 
@@ -143,7 +143,7 @@ def test_cli_failure_does_not_report_disabled_workflow(monkeypatch, tmp_path, ca
 
 @pytest.mark.parametrize("exit_code, checked", [(1, "true"), (2, "false")])
 def test_make_preserves_checked_when_it_collapses_exit_codes(tmp_path, exit_code, checked):
-    """Alert routing uses checked because Make returns 2 for both failures."""
+    """The checked output tells apart the two failure paths that Make reports as exit 2."""
     output = tmp_path / "output"
     makefile = tmp_path / "Makefile"
     makefile.write_text(f"check:\n\t@echo checked={checked} >> {output}\n\t@exit {exit_code}\n")

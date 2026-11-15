@@ -69,7 +69,7 @@ const NEED_MORE = -1;
 export function createCsvRowParser(options, onRow) {
     const { delimiter, quote, escape } = options;
 
-    // Character codes for the hot scanning loop (avoids per-char string allocation).
+    // Character codes used by the scanning loops.
     const CR = 13;
     const LF = 10;
     const quoteCode = quote.charCodeAt(0);
@@ -96,9 +96,8 @@ export function createCsvRowParser(options, onRow) {
     /** @type {string|null} */
     let parseError = null;
 
-    // Reject oversized fields *before* appending, so we never allocate a
-    // large string to discard. addLength is the number of characters
-    // about to be appended to the field being parsed.
+    // Rejects oversized fields before appending. addLength is the number of
+    // characters about to be appended to the field being parsed.
     /**
      * @param {number} addLength - Characters about to be appended
      * @returns {boolean} True when the field would exceed the limit

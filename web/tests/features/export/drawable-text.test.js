@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import { sanitizeModel, sanitizeText } from "../../../src/features/export/drawable-text.js";
 
 /**
- * Build the coverage a Latin face reports: printable ASCII and Latin-1.
+ * Build the coverage of the bundled Latin faces: printable ASCII and Latin-1.
  *
- * The shape both shipped faces have, so a test here reads the way the real
- * document does without depending on the font files themselves.
+ * Tests use this instead of loading the font files.
  * @returns {Set<number>} Code points
  */
 function latinCoverage() {
@@ -30,14 +29,12 @@ describe("sanitizeText", () => {
     });
 
     it("marks a dropped character instead of losing it", () => {
-        // jsPDF omits what the face has no glyph for, so this name reached the
-        // page as "uo319 Smith" with nothing to say it had been damaged.
+        // Characters with no glyph in the face become "?" so the loss stays visible.
         expect(sanitizeText("Ňuňo319 Smith", COVERAGE)).toBe("?u?o319 Smith");
     });
 
     it("collapses a run of dropped characters into one mark", () => {
-        // One mark per name reads as a name that could not be printed; one per
-        // character reads as a row of marks.
+        // Each run of missing characters becomes one "?".
         expect(sanitizeText("田中 Fernández-Hall", COVERAGE)).toBe("? Fernández-Hall");
         expect(sanitizeText("Ňuňo596 陈", COVERAGE)).toBe("?u?o596 ?");
     });
@@ -48,17 +45,14 @@ describe("sanitizeText", () => {
     });
 
     it("keeps an accent that arrived decomposed", () => {
-        // "a" followed by a combining acute. Both faces carry the precomposed
-        // letter and neither carries the mark on its own, so composing first
-        // keeps a name whole that would otherwise have been marked where its
-        // accent was. Written as escapes because the two forms look identical
-        // in an editor and one of them is the point of the test.
+        // "a" followed by a combining acute is composed before the glyph check,
+        // so the accented letter is kept. Uses escapes so the decomposed and
+        // composed forms stay distinct in source.
         expect(sanitizeText("Fern\u0061\u0301ndez", COVERAGE)).toBe("Fern\u00e1ndez");
     });
 
     it("keeps the line breaks a message body is laid out by", () => {
-        // Layout rather than glyphs: jsPDF's own line splitting reads these, and
-        // no cmap carries a newline.
+        // Line breaks and tabs are layout, not glyphs, so they pass through unchanged.
         expect(sanitizeText("First line\nsecond\tline\r\n", COVERAGE)).toBe(
             "First line\nsecond\tline\r\n",
         );
@@ -103,8 +97,7 @@ describe("sanitizeModel", () => {
 
         const sanitized = sanitizeModel(model, COVERAGE);
 
-        // The layout engine formats this date, so it has to stay a date rather
-        // than be copied into a bare object one field at a time.
+        // Dates stay Date instances, since the layout engine formats them.
         expect(sanitized.generatedAt).toBe(generatedAt);
         expect(sanitized).toEqual(model);
     });

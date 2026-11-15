@@ -6,9 +6,9 @@ Exceptions expire on their ``review_by`` date. An exception restricted to
 unfixed findings stops applying when a fix becomes available. Unused exceptions
 produce errors so obsolete entries cannot remain unnoticed.
 
-The wrapper reads JSON findings rather than relying on npm's exit code, so it
-applies the severity threshold itself. Every severity is checked by default.
-``--audit-level`` narrows a local run.
+The wrapper reads JSON findings and applies the severity threshold itself, rather
+than using npm's exit code. Every severity is checked by default. ``--audit-level``
+narrows a local run.
 
 Exceptions live under ``npm_vulnerability_exceptions`` in
 ``config/security_audit.json`` and share the schema of the Python entries.
@@ -70,8 +70,8 @@ def _advisory_ids(via: dict[str, object]) -> tuple[str, tuple[str, ...]]:
     """Return the primary advisory id and aliases for one ``via`` advisory.
 
     npm identifies advisories by a numeric ``source`` id and a GitHub advisory
-    ``url``. The GHSA id is preferred as the stable primary id; the numeric
-    source id is kept as an alias so either form matches a reviewed exception.
+    ``url``. The GHSA id is the primary id when present. The numeric source id is
+    kept as an alias, so either form matches a reviewed exception.
     """
     url_value = via.get("url", "")
     if not isinstance(url_value, str):
@@ -146,8 +146,7 @@ def _fix_is_available(value: object, *, package: str) -> bool:
 
 def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFinding, ...]:
     """Parse ``npm audit --json`` output into vulnerability findings."""
-    # npm always reports ``vulnerabilities`` and each node's ``fixAvailable``;
-    # defaulting either would read an incomplete report as clean or unfixed.
+    # A missing ``vulnerabilities`` object or ``fixAvailable`` value is an error.
     vulnerabilities = payload.get("vulnerabilities")
     if not isinstance(vulnerabilities, dict):
         raise ValueError("npm audit 'vulnerabilities' must be an object")
@@ -157,8 +156,7 @@ def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFindin
         if not isinstance(node, dict):
             raise ValueError(f"npm audit vulnerability entries must be objects: {name}")
 
-        # Every vulnerable package names at least one advisory or upstream
-        # package, so a missing or empty ``via`` marks an incomplete report.
+        # A missing or empty ``via`` is an error.
         via = node.get("via")
         if not isinstance(via, list) or not via:
             raise ValueError(f"npm audit 'via' must be a non-empty list: {name}")
@@ -233,8 +231,7 @@ def _audit_payload(result: subprocess.CompletedProcess[str]) -> dict[str, object
 def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, ...]:
     """Run ``npm audit --json`` and return parsed vulnerability findings.
 
-    npm exits non-zero only when it found vulnerabilities, so a failed run
-    whose report names no advisory is incomplete and cannot pass the audit.
+    A non-zero exit whose report names no advisory is an error.
     """
     result = _execute_npm_audit(npm_command)
     findings = _parse_npm_audit(_audit_payload(result))
@@ -250,8 +247,7 @@ def _matches_exception(
 ) -> bool:
     """Return whether a reviewed exception matches one npm finding.
 
-    Advisory ids compare case-insensitively: findings normalize GHSA ids to
-    upper case, so a lower-case configured exception must still match.
+    Advisory ids compare case-insensitively.
     """
     finding_ids = {advisory_id.upper() for advisory_id in finding.all_ids}
     return (
@@ -304,7 +300,7 @@ def _audit_npm_dependencies(
         matched_exception_keys.update(entry.key for entry in matching)
 
         # An exception that cannot apply is an error even for a finding below the
-        # audit level, so stale entries surface in every run.
+        # audit level.
         error = _finding_exception_error(finding, matching, today)
         if error is not None:
             errors.append(error)

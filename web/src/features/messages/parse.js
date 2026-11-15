@@ -4,7 +4,7 @@
  * Owns the dedicated Web Worker lifecycle (creation, watchdog timeout,
  * teardown) and the main-thread parsing fallback used when the worker is
  * unavailable, errors, or times out. The worker handle and its request
- * bookkeeping are module-private so no other module can reassign them.
+ * bookkeeping are module-private.
  */
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
@@ -57,8 +57,8 @@ export function initWorker() {
 /**
  * Terminate messages parsing worker.
  *
- * Requests still in flight are dropped, not failed: this runs when the page is
- * leaving, and failing them would start the main-thread fallback parse.
+ * Requests still in flight are dropped, not failed: their promises never settle
+ * and no fallback parse starts.
  */
 export function terminateWorker() {
     pendingRequests.clear();
@@ -66,8 +66,8 @@ export function terminateWorker() {
 }
 
 /**
- * End every request in flight as unanswered, so each falls back, and let the
- * worker go: one that failed or stalled is not going to answer.
+ * Resolves every request in flight as unanswered, so each falls back, and
+ * terminates the worker.
  */
 function failPendingRequests() {
     const entries = [...pendingRequests.values()];
@@ -77,9 +77,8 @@ function failPendingRequests() {
 }
 
 /**
- * Arm the watchdog for the oldest request still waiting, so a small request
- * queued behind a large one neither cuts the large one short nor leaves the
- * large one's budget armed once it is answered.
+ * Arm the watchdog from the oldest waiting request's deadline, or clear it when
+ * no request is waiting.
  */
 function armWatchdog() {
     const [oldest] = pendingRequests.values();
@@ -122,9 +121,8 @@ function handleWorkerMessage(event) {
         return;
     }
     pendingRequests.delete(message.requestId);
-    // The page keeps the state it was sent, and an idle worker can hold the
-    // parse's garbage for minutes, so let it go unless a newer request is
-    // still on its way to it.
+    // Terminates the worker when no request is waiting. The page keeps the
+    // state it received.
     if (pendingRequests.size === 0) {
         workers.terminate();
     } else {
@@ -138,8 +136,8 @@ function handleWorkerMessage(event) {
  * @param {Event} event - Worker error or messageerror event
  */
 function handleWorkerError(event) {
-    // Fixed text: the worker parses the user's messages, so its own error can
-    // carry a line of one.
+    // Reports fixed text only. The worker's own error message can contain user
+    // data.
     captureError(new Error(`Messages worker ${event && event.type ? event.type : "error"} event`), {
         module: "messages-insights",
         operation: "worker-error-event",
@@ -160,9 +158,8 @@ export async function processFiles(messagesCsv, connectionsCsv) {
     if (workerResult) {
         return workerResult;
     }
-    // The worker was unavailable, errored, or timed out. Re-parsing a large
-    // export on the UI thread would freeze the page, so return an
-    // explanatory empty state above the size ceiling.
+    // The worker was unavailable, errored, or timed out. Above the size
+    // ceiling, return an explanatory failure instead of parsing on the UI thread.
     if (
         csvSourceSize(messagesCsv) + csvSourceSize(connectionsCsv) >
         MAIN_THREAD_FALLBACK_MAX_CHARS
@@ -216,8 +213,8 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
                 },
             });
         } catch {
-            // A structured-clone failure names the value it could not clone,
-            // and that value is one of the raw exports.
+            // Captures fixed text only. A structured-clone error can name the
+            // uncloneable value, which here is a raw export.
             captureError(new Error("Messages worker request could not be sent."), {
                 module: "messages-insights",
                 operation: "worker-post-message",

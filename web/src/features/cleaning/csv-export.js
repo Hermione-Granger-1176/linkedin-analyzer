@@ -1,7 +1,7 @@
 /**
  * Cleaned CSV export for files too large for an in-browser Excel workbook.
- * Rows are written in fixed-size parts and handed to a Blob, so the export
- * never builds one string for the whole file.
+ * Rows are written in fixed-size parts and handed to a Blob. The export never
+ * builds one string for the whole file.
  */
 
 import { getConfig } from "./configs.js";
@@ -48,8 +48,8 @@ export function buildCleanedCsvBlob(data, fileType) {
 }
 
 /**
- * Download file name for a cleaned CSV. The suffix keeps it apart from the
- * LinkedIn export it came from, which has the same base name.
+ * Download file name for a cleaned CSV: the workbook output name with its
+ * `.xlsx` extension replaced by `_cleaned.csv`.
  * @param {string} fileType - Cleaner file type
  * @returns {string}
  */

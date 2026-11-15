@@ -54,7 +54,7 @@ describe("MessagesAnalytics", () => {
 
         const state = MessagesAnalytics.buildMessageState(rows);
 
-        // Regression: keying url-vs-name used to split the same person in two.
+        // One person seen with and without a profile URL is one contact.
         expect(state.contacts.size).toBe(1);
         const contact = [...state.contacts.values()][0];
         expect(contact.count).toBe(2);
@@ -89,8 +89,8 @@ describe("MessagesAnalytics", () => {
 
         const state = MessagesAnalytics.buildMessageState(rows);
 
-        // The name-only entry is promoted to the URL key; the earlier event must
-        // be repointed to it so range-based aggregation does not re-split.
+        // The name-only entry is promoted to the URL key, and the earlier event is
+        // repointed to it.
         expect(state.contacts.size).toBe(1);
         const contact = [...state.contacts.values()][0];
         expect(contact.count).toBe(2);
@@ -101,8 +101,8 @@ describe("MessagesAnalytics", () => {
     });
 
     it("keeps two same-name contacts with different profile URLs apart", () => {
-        // Messaging John Smith A, then John Smith B, then A again used to merge
-        // the two people and leave a cyclic key remap that hung the worker.
+        // Two same-name contacts with different profile URLs stay separate across
+        // interleaved conversations.
         const csv = [
             "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
             'c-a,Me Self,John Smith,2025-01-01 10:00:00 UTC,"hi",INBOX,https://www.linkedin.com/in/me,https://www.linkedin.com/in/john-smith-a',
@@ -145,7 +145,7 @@ describe("MessagesAnalytics", () => {
         const bob = "https://linkedin.com/in/bob";
         const carol = "https://linkedin.com/in/carol";
 
-        // Self (Me) appears on both sender and recipient sides so detection is stable.
+        // Me appears as both sender and recipient, so self is detected.
         const rows = [
             msg("A", "2025-01-01 10:00:00", "Me", me, "Alice", alice), // self → Alice
             msg("A", "2025-01-02 10:00:00", "Alice", alice, "Me", me), // Alice replies
@@ -216,9 +216,9 @@ describe("MessagesAnalytics", () => {
         const me = "https://linkedin.com/in/me";
         const alice = "https://linkedin.com/in/alice";
 
-        // Self appears on both sides so self-detection is stable. The only
-        // inbound message is from an anonymous "LinkedIn Member", which must not
-        // count as a real reply or inflate the received tally.
+        // Me appears on both sides, so self is detected. The only inbound message
+        // is from an anonymous "LinkedIn Member", which does not count as a reply
+        // or add to the received tally.
         const rows = [
             msg("A", "2025-01-01 10:00:00", "Me", me, "Alice", alice),
             msg("A", "2025-01-02 10:00:00", "LinkedIn Member", "", "Me", me),
@@ -508,8 +508,8 @@ describe("MessagesAnalytics", () => {
     });
 
     it("buildContactKey uses name-based key when no URL is provided", () => {
-        // Access via buildConnectionState which calls buildContactKey indirectly
-        // We can test it indirectly through buildMessageState with a nameless sender
+        // buildContactKey is reached indirectly through buildMessageState with a
+        // sender that has no profile URL.
         const rows = [
             {
                 FROM: "Jane Doe",

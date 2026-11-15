@@ -622,8 +622,7 @@ export function initSentry() {
     const appBasePath = resolveAppBasePath();
     Sentry.init({
         dsn,
-        // Same-origin relay (api/sentry-tunnel.mjs) so the CSP can keep
-        // connect-src 'self' instead of allowing every Sentry ingest host.
+        // Same-origin relay (api/sentry-tunnel.mjs). Keeps connect-src 'self' in the CSP.
         tunnel: SENTRY_TUNNEL_PATH,
         environment,
         release,
@@ -775,8 +774,8 @@ export function captureMetric(name, value) {
 }
 
 /**
- * Record the effects tier in use, sent as one allowlisted tag with session
- * metrics so the owner can see which tiers real users get.
+ * Record the effects tier in use. It is sent as one allowlisted tag with the
+ * session metrics.
  * @param {string} tier - lite, standard, or rich
  */
 export function setTelemetryEffectsTier(tier) {
@@ -814,8 +813,8 @@ export function flushMetrics() {
 
 /**
  * Send one processing-unfinished event with allowlisted buckets only. With
- * consent granted, a test sink on window records the reduced fields, so e2e
- * tests can check the event without a build-time DSN.
+ * consent granted, a test sink on window records the reduced fields. The e2e
+ * tests use it to check the event without a build-time DSN.
  * @param {{ sizeBucket: string, memoryBucket: string, mode: string }} fields
  */
 export function captureProcessingUnfinished(fields) {

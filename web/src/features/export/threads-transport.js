@@ -1,8 +1,8 @@
 /**
  * Select PDF message threads through an export-owned worker.
  *
- * Pass the stored messages and connections sources to the worker. Report
- * fixed errors because either source may appear in thrown values.
+ * Passes the stored messages and connections sources to the worker. Reports
+ * fixed error text only, since thrown values can contain either source.
  * worker-transport.js manages the worker, timeout, and cancellation.
  */
 
@@ -75,14 +75,8 @@ function threadsRequest(messagesCsv, connectionsCsv, options) {
             type: "threads",
             payload: {
                 messagesCsv,
-                // The file itself rather than the tiebreak keys read out of it.
-                // Deriving them here means parsing tens of thousands of
-                // connections on the UI thread, which is the very thing the
-                // worker exists to keep off it; deriving them in the worker
-                // costs the post one more string. Without either, the worker
-                // cannot break a self-detection tie the connections file could
-                // have settled, and every direction chip in a one-conversation
-                // export reads "unknown".
+                // The raw connections CSV. The worker derives the tiebreak keys
+                // from it.
                 connectionsCsv,
                 people: options.people,
                 messagesPerPerson: options.messagesPerPerson,
@@ -90,10 +84,8 @@ function threadsRequest(messagesCsv, connectionsCsv, options) {
         },
         parse: parseThreadsWorkerMessage,
         interpret: interpretReply,
-        // The budget is the shared one rather than a formula of this module's
-        // own: the messages transport watchdogs the very same pair of files, and
-        // two different allowances over one export was an accident of this
-        // module having been written first.
+        // The shared budget from computeWorkerTimeout, which the messages
+        // transport also uses for the same pair of files.
         timeoutMs: computeWorkerTimeout(messagesCsv, connectionsCsv),
     };
 }
@@ -106,11 +98,8 @@ function threadsRequest(messagesCsv, connectionsCsv, options) {
  */
 function interpretReply(message, context) {
     if (!message.payload.success) {
-        // Settled whatever id it arrived under, because only one request is ever
-        // in flight and waiting out the watchdog would look like a hang. The
-        // worker declining to parse a file the user uploaded is the same event
-        // under either id, so it is reported either way; what it settles as
-        // turns on the id, per `failureOutcome`.
+        // A failure settles the request in flight whatever id it arrived under.
+        // The outcome depends on the id, per `failureOutcome`.
         context.report("Threads worker reported a failure.", "threads-worker-failure");
         return failureOutcome(message, context);
     }
@@ -152,9 +141,8 @@ function mainThreadContactKeys(connectionsCsv) {
     try {
         return collectContactKeys(connectionsCsv);
     } catch {
-        // A tiebreak is a nicety, so this costs a direction chip rather than the
-        // section. The caught value came from parsing the user's own
-        // connections, so only a fixed error crosses into telemetry.
+        // A failed tiebreak costs a direction chip, not the section. Only a fixed
+        // error is reported to telemetry.
         captureError(new Error("Connections could not be read for the export's tiebreak."), {
             module: "pdf-export",
             operation: "contact-keys-main-thread-parse",

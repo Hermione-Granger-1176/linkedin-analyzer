@@ -83,7 +83,7 @@
 }
 
 .chart-canvas-wrap canvas {
-    /* Avoid inline baseline space below a canvas that fills its wrapper. */
+    /* Removes the inline baseline gap below a canvas that fills its wrapper. */
     display: block;
     width: 100%;
     height: 100%;

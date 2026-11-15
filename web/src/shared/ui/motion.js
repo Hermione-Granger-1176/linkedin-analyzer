@@ -11,8 +11,8 @@ export function prefersReducedMotion() {
 /**
  * Show a pose, restart its animation, and hide it after the specified duration.
  *
- * A hidden screen has a display:none subtree, where animationend does not fire.
- * The timer removes the pose even when its animation cannot finish.
+ * The timer hides the pose even when animationend never fires, such as inside
+ * a display:none subtree.
  * @param {object} shot - The moment to play.
  * @param {Element} shot.element - The drawing the pose is held in.
  * @param {number} shot.durationMs - How long the pose stays on screen.
@@ -24,10 +24,9 @@ export function prefersReducedMotion() {
  */
 export function playOneShot({ element, durationMs, previousTimer, apply, reset, done }) {
     window.clearTimeout(previousTimer);
-    // The element is an <svg>, and `hidden` is an HTMLElement property: setting
-    // it there would never reach the attribute the stylesheet matches on.
+    // Toggles the hidden attribute directly, since SVG elements have no hidden property.
     element.removeAttribute("hidden");
-    // Reset and force layout so repeated calls restart the animation.
+    // Reset, force a layout, then apply, so repeated calls restart the animation.
     reset();
     void element.getBoundingClientRect();
     apply();

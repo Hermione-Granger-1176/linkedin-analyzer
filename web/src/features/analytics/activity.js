@@ -76,12 +76,11 @@ export const AnalyticsEngine = (() => {
     const GROWTH_TOP_MONTHS = 10;
     // Months with this many posts or fewer count as "quiet" for the comparison.
     const GROWTH_QUIET_MAX_POSTS = 2;
-    // A focus shift / engagement-style card needs at least this many active
-    // months so the first/last buckets are not built from a single data point.
+    // Minimum months for the focus-shift and engagement-style cards.
     const MIN_SHIFT_MONTHS = 6;
     /** @type {Readonly<Record<string, keyof ContentMix | undefined>>} */
     const SHARE_TYPE_MAP = Object.freeze({ text: "textOnly", links: "links", media: "media" });
-    // Callers pick the key from which of day and hour are set, so the casts hold.
+    // Callers choose the key from whether day and hour are set. The casts depend on that.
     /** @typedef {(bucket: AnyMonthBucket, filters: AnalyticsFilters) => number} DimensionCount */
     /** @type {Readonly<Record<string, DimensionCount>>} */
     const DIMENSION_COUNT_BY_KEY = Object.freeze({
@@ -95,9 +94,8 @@ export const AnalyticsEngine = (() => {
     });
 
     /**
-     * Create the accumulator that indexes dated events by month and day.
-     * Indexing by month and day lets view building cost O(months) instead of
-     * O(events).
+     * Create the accumulator that indexes dated events by month and day, so view
+     * building costs O(months) rather than O(events).
      * @returns {ActivityAccumulator}
      */
     function createActivityAccumulator() {
@@ -244,8 +242,8 @@ export const AnalyticsEngine = (() => {
                 ]),
             );
 
-            // Skip the full pass over connection rows entirely when there is no
-            // posting activity to correlate them against, so the card cannot fire.
+            // No connection pass runs when there is no posting activity, and
+            // networkGrowth is null in that case.
             const networkGrowth =
                 monthIndex.size === 0
                     ? null
@@ -363,8 +361,7 @@ export const AnalyticsEngine = (() => {
         });
 
         const posts = entries.map((entry) => entry.posts);
-        // Without posting variance the correlation is undefined and the
-        // top-vs-quiet comparison is meaningless, so require a real spread.
+        // Returns null when posting has no variance, since the correlation is undefined then.
         if (Math.max(...posts) === Math.min(...posts)) {
             return null;
         }
@@ -386,14 +383,13 @@ export const AnalyticsEngine = (() => {
             return null;
         }
 
-        // Round the averages first and derive the multiplier from those same
-        // displayed values, so the headline ratio always matches the "X vs Y"
-        // numbers shown in the card.
+        // The multiplier is derived from the rounded averages, so it matches the
+        // "X vs Y" numbers shown in the card.
         const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
         const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
         const multiplier = quietAvg > 0 ? Math.round(topAvg / quietAvg) : 0;
-        // Display the comparison only with positive correlation and a multiplier
-        // above one. These conditions do not establish that posting caused growth.
+        // Shown only with positive correlation and a multiplier of at least 2. The
+        // correlation does not show that posting caused growth.
         if (correlation <= 0 || multiplier < 2) {
             return null;
         }
@@ -417,9 +413,8 @@ export const AnalyticsEngine = (() => {
         if (!filters.topic || filters.topic === "all") {
             return 1;
         }
-        // Buckets this code builds always have a positive total. Analytics saved
-        // by an earlier version can outlive a deploy (the session TTL renews on
-        // every visit), so a zero total returns 0 instead of dividing by zero.
+        // Saved analytics from an earlier version can have a zero total, so return
+        // 0 instead of dividing by zero.
         /* v8 ignore next 3 */
         if (!bucket.total) {
             return 0;
@@ -478,11 +473,10 @@ export const AnalyticsEngine = (() => {
         if (filters.shareType && filters.shareType !== "all" && useMonth) {
             const typeKey = SHARE_TYPE_MAP[filters.shareType];
             if (typeKey) {
-                // Scale the (possibly topic-adjusted) post count by the share of
-                // posts that are this type so a topic + shareType filter
-                // intersects, instead of the raw shareType count overwriting the
-                // topic adjustment. With no topic filter monthPosts === bucket.posts,
-                // so this reduces to bucket.shareTypes[typeKey] as before.
+                // Scale the (possibly topic-adjusted) post count by this type's share
+                // of posts, so topic and shareType filters combine. With no topic
+                // filter, monthPosts equals bucket.posts, so the result equals
+                // bucket.shareTypes[typeKey].
                 const shareTypeRatio =
                     bucket.posts > 0 ? bucket.shareTypes[typeKey] / bucket.posts : 0;
                 monthPosts = Math.round(monthPosts * shareTypeRatio);
@@ -491,11 +485,9 @@ export const AnalyticsEngine = (() => {
             monthTotal = monthPosts;
         }
 
-        // Apply day/hour dimensional filter. The day/hour/heatmap counters tally
-        // ALL activity in the month, so the fraction must be taken over the
-        // month's full activity (bucket.total). Using the already-narrowed
-        // monthTotal as the denominator lets the ratio exceed 1 and inflates the
-        // counts when a topic or shareType filter is also active.
+        // Apply the day/hour filter. The day, hour, and heatmap counters tally all
+        // activity in the month, so the ratio uses bucket.total as its denominator.
+        // A narrowed monthTotal would let the ratio exceed 1.
         const dimensionKey = hasDay && hasHour ? "both" : hasDay ? "day" : hasHour ? "hour" : null;
         if (useMonth && dimensionKey) {
             const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
@@ -1026,9 +1018,8 @@ export const AnalyticsEngine = (() => {
                 streak = 1;
                 continue;
             }
-            // Round the day delta: across a DST transition two consecutive local
-            // calendar days are 23h or 25h apart, so an exact `=== 1` on the raw
-            // ms/day ratio would miss the boundary and reset the streak.
+            // Rounds the day delta. Across a DST transition consecutive local days
+            // are 23h or 25h apart, so an exact comparison with 1 would reset the streak.
             const diff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
             if (diff === 1) {
                 streak++;
@@ -1085,8 +1076,8 @@ export const AnalyticsEngine = (() => {
         }
 
         const percent = ((recent - older) / older) * 100;
-        // Asymmetric thresholds: growth is notable at 8%, decline at -12% to avoid
-        // flagging minor dips as meaningful slowdowns.
+        // Asymmetric thresholds: growth counts as up above 8%, and decline as down
+        // below -12%.
         const direction = percent > 8 ? "up" : percent < -12 ? "down" : "flat";
 
         return { percent, direction, currentCount: recent, previousCount: older };

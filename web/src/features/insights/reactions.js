@@ -14,11 +14,11 @@ import {
     PIP_TORSO,
 } from "../../shared/ui/pip-parts.js";
 
-/* Crop the bust with room for raised arms and props. Enlarge the props
-so they remain recognizable at the rendered size of 56 pixels. */
+/* Crop the bust with room for raised arms and props. Props are enlarged for
+the rendered size of 56 pixels. */
 const REACTION_VIEWBOX = "26 4 98 98";
 
-/* Lifted clear of the eyes: the difference between pleased and proud. */
+/* Raised brows, for a proud look. */
 const BROWS_PROUD = `
     <path class="pip-ink pip-brow" d="M57.5 36.5 Q62 32.5 66.5 36" />
     <path class="pip-ink pip-brow" d="M82.5 35.5 Q78 31.5 73.5 35" />`;
@@ -37,9 +37,8 @@ const EYES_HAPPY = `
     <path class="pip-ink" d="M57.6 45.6 Q62 40.4 66.4 45.6" />
     <path class="pip-ink" d="M73.6 45.6 Q78 40.4 82.4 45.6" />`;
 
-/* The same arcs the other way up: lids down, fast asleep. Dropped clear of the
-   sleepy brows above them, because a lid stroke that touches a brow stroke
-   closes into one dark almond, and a dark almond reads as a glare. */
+/* The same arcs the other way up: lids down, asleep. Positioned below the
+   sleepy brows so the strokes do not touch. */
 const EYES_ASLEEP = `
     <path class="pip-ink" d="M56.8 45 Q62 50.6 67.2 45" />
     <path class="pip-ink" d="M72.8 45 Q78 50.6 83.2 45" />`;
@@ -57,9 +56,8 @@ const ARM_LEFT_REST = `
 const ARMS_REST = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q96 92 97 102" />`;
 
-/* Both elbows out and both fists up by the cheeks: at 56 pixels the bent-arm
-   silhouette is the whole of the flex, and the short line inside each bend is
-   the only bicep there is room for. */
+/* Both elbows out and both fists up by the cheeks. A short line inside each
+   bend draws the bicep. */
 const ARMS_FLEX = `
     <path class="pip-ink" d="M55 84 Q34 84 36 68 Q38 58 46 56" />
     <path class="pip-ink" d="M85 84 Q106 84 104 68 Q102 58 94 56" />
@@ -68,8 +66,8 @@ const ARMS_FLEX = `
     <circle class="pip-ink pip-paper" cx="48" cy="52" r="8" />
     <circle class="pip-ink pip-paper" cx="92" cy="52" r="8" />`;
 
-/* Draw a short diagonal thumb behind the fist. Keep the curled fingers
-visible so the gesture reads as a thumbs-up at 56 pixels. */
+/* Draws a short diagonal thumb behind the fist. The curled fingers stay
+visible. */
 const ARMS_THUMBS_UP = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q99 82 101 75" />
     <path class="pip-ink pip-paper" d="M99.6 54.1 L112.1 41.6 A5.5 5.5 0 0 1 119.9 49.4 L107.4 61.9 Z" />
@@ -78,7 +76,7 @@ const ARMS_THUMBS_UP = `${ARM_LEFT_REST}
         d="M96.5 75 a3.8 3.8 0 0 1 0 -7.6 a3.8 3.8 0 0 1 0 -7.6 a3.8 3.8 0 0 1 0 -7.6 H108.5 Q114.5 52.2 114.5 58.2 V69 Q114.5 75 108.5 75 Z"
     />`;
 
-/* A cup held up at head height, big enough to be a cup at 56 pixels. */
+/* A cup held up at head height, sized to read as a cup. */
 const ARMS_TROPHY = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q99 82 102 74" />
     <circle class="pip-ink pip-paper" cx="103" cy="68" r="7" />
@@ -111,8 +109,8 @@ const ARMS_BREATHER = `
     <ellipse class="pip-drop" cx="100" cy="30" rx="4.2" ry="5.6" />
     <ellipse class="pip-drop" cx="108" cy="45" rx="2.8" ry="3.8" />`;
 
-/* Draw the dozing pose. Keep the sleep marker inside the right edge after the
-   figure leans. */
+/* Draw the dozing pose. The sleep marker stays inside the right edge of the
+   leaning figure. */
 const ARMS_DOZE = `
     <path class="pip-ink" d="M55 84 Q47 94 53 101" />
     <path class="pip-ink" d="M85 84 Q93 94 87 101" />
@@ -125,8 +123,8 @@ const ARMS_POINT = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M96 46 Q110 38 119 46" />
     <path class="pip-ink" d="M114 40 L120 46 L114 52" />`;
 
-/* Draw the high-five pose. Place fingers before the palm so the palm covers
-   their join. */
+/* Draw the high-five pose. Fingers are drawn before the palm, so the palm
+   covers their joins. */
 const ARMS_HIGH_FIVE = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q102 80 105 70" />
     <path class="pip-ink pip-paper" d="M98 58 V46 Q98 42 101 42 Q104 42 104 46 V58 Z" />
@@ -177,9 +175,9 @@ const FALLBACK_POSE = pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_REST);
 
 /**
  * Poses keyed by the insight ids generated in features/analytics/insights.js.
- * Every id that file can emit has an entry here; anything else falls back. A
- * Map rather than an object literal so a worker-supplied "constructor" or
- * "toString" misses instead of pulling something off Object.prototype.
+ * Every id that file can emit has an entry here; anything else falls back. The
+ * table is a Map, so keys such as "constructor" or "toString" miss rather than
+ * matching Object.prototype members.
  * @type {Map<unknown, {body: string, lean: string}>}
  */
 const POSES = new Map([

@@ -50,7 +50,7 @@ def test_issue_summary_includes_meta_labels_and_recent_comments() -> None:
     assert "milestone: v1" in text
     assert "comments: 4" in text
     assert "recent comments:" in text
-    # Only the last three comments are echoed, so the oldest is dropped.
+    # Only the last three comments are echoed.
     assert "oldest" not in text
     assert "@unknown: no author here" in text
     assert "@c: newest" in text

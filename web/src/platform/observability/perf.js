@@ -3,7 +3,7 @@
 import { reportPerformanceMeasure } from "./telemetry.js";
 
 /**
- * Yield one frame so a loading overlay can paint before heavy parsing.
+ * Resolves after the next animation frame.
  * @returns {Promise<void>}
  */
 export function nextFrame() {
@@ -41,7 +41,7 @@ export function measurePerformance(name, start, end) {
 
         reportPerformanceMeasure(name, lastEntry.duration);
     } catch {
-        // Ignore missing marks to keep instrumentation resilient.
+        // Missing marks are ignored.
     }
 }
 

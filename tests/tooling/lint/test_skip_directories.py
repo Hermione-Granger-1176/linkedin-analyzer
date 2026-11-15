@@ -10,15 +10,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def ignored_directory_names() -> set[str]:
-    """Return .gitignore directory names a component matcher can express.
+    """Return the .gitignore directory names that a single-component matcher can express.
 
-    Only trailing-slash entries name a directory outright. A leading slash
-    anchors the pattern to the repository root, but the entry still names the
-    single component that the walkers compare.
-
-    Globs and genuinely nested patterns are left to git. The walkers compare
-    one path component at a time, so a nested pattern cannot be represented
-    without skipping directories that are not ignored by the same pattern.
+    Only trailing-slash entries count. A leading slash is dropped. Globs and
+    nested patterns are skipped, since the walkers compare one path component
+    at a time.
     """
     names: set[str] = set()
     for raw in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines():
@@ -40,7 +36,7 @@ def test_every_ignored_directory_is_skipped() -> None:
 
 
 def test_the_gitignore_scan_finds_real_entries() -> None:
-    """Guard the parser itself, so the check above cannot pass vacuously."""
+    """Checks that the parser finds known entries."""
     names = ignored_directory_names()
 
     assert "node_modules" in names

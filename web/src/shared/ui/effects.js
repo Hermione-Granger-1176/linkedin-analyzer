@@ -19,10 +19,9 @@ export const Effects = (() => {
     const busySpans = [];
 
     /**
-     * Record when the page is busy, from the overlays and the screens' loading
-     * state, so a long frame reported after the work ended is not blamed on
-     * decoration. A busy state that starts and ends within one task leaves a
-     * zero-length span at the time the observer runs, inside that task.
+     * Records busy spans from the overlays and the screens' loading state. A busy
+     * state that starts and ends within one task is recorded as a zero-length span
+     * at the time the observer runs.
      */
     function recordBusySpans() {
         if (typeof MutationObserver !== "function") {
@@ -65,21 +64,20 @@ export const Effects = (() => {
         });
     }
 
-    // Where the removed Auto, Lite, and Full button stored its choice.
+    // localStorage key for the effects choice. The page removes any value stored under it.
     const RETIRED_OVERRIDE_KEY = "linkedin-analyzer-effects";
 
-    /** Drop the retired button's stored choice; nothing reads it any more. */
+    /** Removes any stored value under RETIRED_OVERRIDE_KEY. */
     function forgetRetiredOverride() {
         try {
             window.localStorage.removeItem(RETIRED_OVERRIDE_KEY);
         } catch {
-            // Storage can be blocked; the stale value is harmless either way.
+            // Storage access failures are ignored.
         }
     }
 
     /**
-     * True while processing or a screen load is expected to block the page, so
-     * its long frames are not blamed on decoration.
+     * True while processing or a screen load blocks the page.
      * @returns {boolean}
      */
     function isBusy() {

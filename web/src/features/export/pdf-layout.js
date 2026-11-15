@@ -2,8 +2,7 @@
  * Page geometry and color arithmetic shared by the PDF layout engine.
  *
  * The document module owns blocks and pagination, and the chart module owns
- * plotting; both need the same millimetre grid and the same rules about which
- * ink reads on which fill. Those live here so neither has to import the other.
+ * plotting. Both use the millimetre grid and the ink-on-fill rules defined here.
  */
 
 /** A4 page geometry and margins, in millimetres. */
@@ -110,9 +109,8 @@ export function contrastRatio(left, right) {
 /**
  * Choose the palette text color with the higher contrast against the fill.
  *
- * Accent names do not establish contrast. For example, yellow text on a yellow
- * tint measured 1.54:1, and a white digit on the yellow accent measured 1.71:1.
- * Compare the actual colors so palette changes also affect the choice.
+ * Accent names do not establish contrast, so the actual colors are compared.
+ * Palette changes therefore also change the choice.
  * @param {Palette} palette - Palette from readPdfPalette()
  * @param {Rgb} background - Fill the text sits on
  * @returns {Rgb} The more readable text color
@@ -126,10 +124,9 @@ export function readableOn(palette, background) {
 /**
  * Blend two colors, standing in for the alpha the page cannot use.
  *
- * jsPDF fills are opaque, so a heatmap cell at a tenth intensity has to be
- * mixed against the paper here rather than drawn translucent over it. Clamping
- * leaves NaN as NaN, so an amount that is not a finite number blends to nothing
- * rather than reaching setFillColor() as three NaN channels.
+ * jsPDF fills are opaque, so a partial-intensity heatmap cell is blended against
+ * the paper here instead of drawn translucent. A non-finite amount is treated
+ * as 0, so every channel is a valid number.
  * @param {Rgb} from - Color at amount 0
  * @param {Rgb} to - Color at amount 1
  * @param {number} amount - Blend position, clamped to [0, 1]

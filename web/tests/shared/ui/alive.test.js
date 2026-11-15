@@ -20,7 +20,7 @@ const HERO_HTML = `
     </section>
 `;
 
-/* Kept in step with alive.js, which keeps them to itself. */
+/* Mirrors the timing constants in alive.js, which does not export them. */
 const IDLE_DELAY_MS = 20000;
 const IDLE_DOODLE_MS = 2600;
 const WAKE_MS = 800;
@@ -29,8 +29,8 @@ let frames = [];
 /** @type {typeof window.requestAnimationFrame} */
 let realRequestAnimationFrame;
 
-/* Record listeners so teardown removes them from the shared globals.
-Keep listener options because removal must match the capture setting. */
+/* Records listeners so teardown can remove them from the shared globals.
+Options are stored too, since removal must pass the same capture setting. */
 const boundListeners = [];
 /** @type {Map<EventTarget, Function>} */
 const realAddEventListener = new Map();
@@ -66,8 +66,8 @@ function releaseListeners() {
 }
 
 /**
- * Answer media queries per query rather than with one shared verdict, which is
- * what alive.js needs: it asks about motion and about the pointer separately.
+ * Answers each media query separately, since alive.js asks about motion and
+ * pointer type as two different queries.
  * @param {{reduceMotion?: boolean, finePointer?: boolean}} preferences - What to answer.
  * @returns {void}
  */
@@ -83,8 +83,7 @@ function mockPreferences({ reduceMotion = false, finePointer = true } = {}) {
 }
 
 /**
- * Load a fresh copy of the module, so the one-shot init flag and the timers it
- * holds start from nothing in every test.
+ * Loads a fresh copy of the module, so its one-shot init flag and timers start empty.
  * @returns {Promise<{initAlive: () => void}>} The freshly imported module.
  */
 async function loadAlive() {
@@ -145,8 +144,8 @@ describe("alive", () => {
     beforeEach(() => {
         vi.useFakeTimers();
         frames = [];
-        // Vitest's fake timers do not stand in for rAF here, and the gaze needs a
-        // frame queue it can drain on demand.
+        // Fake timers do not replace requestAnimationFrame here. Frames go into a
+        // queue that runFrames() drains.
         realRequestAnimationFrame = window.requestAnimationFrame;
         window.requestAnimationFrame = /** @type {typeof window.requestAnimationFrame} */ (
             (callback) => {
@@ -296,8 +295,8 @@ describe("alive", () => {
             movePointerTo(600, 600);
             expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
 
-            // A box with height but no width has no centre worth aiming at
-            // either, and the glance it was holding comes off.
+            // A box with height but no width has no usable centre, so the
+            // current glance is cleared.
             measureHero({ left: 0, top: 0, width: 0, height: 120 });
             movePointerTo(600, 600);
 
@@ -441,7 +440,7 @@ describe("alive", () => {
             document.dispatchEvent(new CustomEvent("themechange"));
             expect(hero().classList.contains("is-waking")).toBe(true);
 
-            // The second flinch gets its own full run rather than the tail of the first.
+            // The second flinch runs for its full duration.
             vi.advanceTimersByTime(WAKE_MS - 1);
             expect(hero().classList.contains("is-waking")).toBe(true);
 
@@ -493,8 +492,8 @@ describe("alive", () => {
 
             window.dispatchEvent(new MouseEvent("pointermove", { clientX: 600, clientY: 600 }));
 
-            // It is the move that sits out, not the listener, which is what lets
-            // the preference be turned back off later in the session.
+            // The move is skipped, not the listener, so the preference can be
+            // turned off later in the session.
             expect(frames).toHaveLength(1);
         });
 
@@ -509,8 +508,7 @@ describe("alive", () => {
             movePointerTo(-200, -200);
             vi.advanceTimersByTime(IDLE_DELAY_MS);
 
-            // The glance he was already holding stays where it was; nothing new
-            // is drawn on top of it.
+            // The glance already shown stays where it was. No new glance is drawn.
             expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
             expect(hero().classList.contains("is-bored")).toBe(false);
         });
@@ -537,8 +535,8 @@ describe("alive", () => {
         it("binds its listeners once however often it is initialized", async () => {
             const { initAlive } = await loadAlive();
             const onWindow = vi.spyOn(window, "addEventListener");
-            // The theme reaction goes on the document, so a second binding
-            // would only show up there.
+            // The theme reaction listens on the document, so a duplicate binding
+            // shows up in the document spy.
             const onDocument = vi.spyOn(document, "addEventListener");
 
             initAlive();

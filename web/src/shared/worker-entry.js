@@ -2,11 +2,10 @@
  * Serve validated requests in a worker that processes uploaded data.
  *
  * Post fixed parser or runtime failure messages. Cancel global failure
- * events to prevent the browser from logging uploaded values.
+ * events, so the browser does not log them.
  *
- * Global failures use ID 0. Request IDs start at 1, allowing the export
- * transport to distinguish a worker failure that permits fallback from
- * a parse failure for a specific request.
+ * Global failures use ID 0. Request IDs start at 1, so the export transport
+ * can tell a worker-wide failure from a parse failure for one request.
  */
 
 /** @typedef {import("../app/worker-contracts.ts").RequestId} RequestId */

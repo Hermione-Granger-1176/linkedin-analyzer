@@ -33,8 +33,8 @@ from scripts.ci.security_audit_policy import (
     unused_exception_errors,
 )
 
-# Default pip-audit invocation. The Makefile overrides this with the uv-managed
-# form so the audit runs against the same resolver that produced the lock.
+# Default pip-audit invocation. The Makefile passes the uv-managed form, which uses
+# the same resolver as the lock.
 DEFAULT_PIP_AUDIT_COMMAND = "pip-audit"
 MAX_SUBPROCESS_ERROR_DETAIL_LENGTH = 500
 
@@ -122,9 +122,9 @@ def _parse_vulnerability(
 def _skipped_dependency(dependency: object, requirements_file: Path) -> str | None:
     """Return a ``--strict`` error for a dependency pip-audit could not audit.
 
-    ``pip-audit --strict`` exits non-zero when it skips a dependency, but its
-    exit code is indistinguishable from "vulnerabilities found". The skip is
-    also recorded in the JSON report, so read it from there instead.
+    ``pip-audit --strict`` exits non-zero on a skip, which looks the same as
+    vulnerabilities found. The skip is also recorded in the JSON report, and that
+    is where it is read.
     """
     if not isinstance(dependency, dict):
         raise ValueError(

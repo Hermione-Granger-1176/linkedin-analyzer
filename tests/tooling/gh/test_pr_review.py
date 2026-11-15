@@ -1144,7 +1144,7 @@ def test_request_copilot_review_wraps_failure() -> None:
 
 
 def test_request_copilot_review_does_not_retry_transient_failures() -> None:
-    """The reviewer mutation opts out of retries so it never double-requests."""
+    """The reviewer request is not retried."""
     runner = FakeGh([(has("pr", "edit"), completed_process(1, "", "(HTTP 502) bad gateway"))])
 
     with pytest.raises(GhError):
@@ -1154,7 +1154,7 @@ def test_request_copilot_review_does_not_retry_transient_failures() -> None:
 
 
 def test_request_copilot_review_reraises_rate_limit() -> None:
-    """A rate limit is re-raised unchanged so callers stop retrying."""
+    """A rate limit is re-raised unchanged."""
     runner = FakeGh(
         [(has("pr", "edit"), completed_process(1, "", "API rate limit exceeded (HTTP 429)"))]
     )
@@ -1225,7 +1225,7 @@ def test_comment_on_pr_defaults_to_current_pr() -> None:
 
 
 def test_comment_on_pr_does_not_retry() -> None:
-    """Commenting opts out of retries so a lost response never double-posts."""
+    """A failed PR comment is not retried."""
     runner = FakeGh([(has("pr", "comment"), completed_process(1, "", "(HTTP 502) bad gateway"))])
 
     with pytest.raises(GhError):
@@ -1235,7 +1235,7 @@ def test_comment_on_pr_does_not_retry() -> None:
 
 
 def test_edit_pr_requires_something_to_change() -> None:
-    """With nothing to set, gh would open an interactive editor, so refuse first."""
+    """With nothing to change, edit_pr raises GhError before calling gh."""
     runner = FakeGh([])
 
     with pytest.raises(GhError, match="title, body, or body file"):
@@ -1255,7 +1255,7 @@ def test_edit_pr_sets_the_title_and_body() -> None:
 
 
 def test_edit_pr_prefers_the_body_file_over_the_inline_body() -> None:
-    """The file path wins, so a body too large to pass inline still reaches gh."""
+    """A body file takes precedence over an inline body."""
     runner = FakeGh([(has("pr", "edit"), completed_process(0, ""))])
 
     pr_review.edit_pr(7, body="inline", body_file="/tmp/body.md", run_fn=runner)
@@ -1265,11 +1265,7 @@ def test_edit_pr_prefers_the_body_file_over_the_inline_body() -> None:
 
 
 def test_edit_pr_defaults_to_current_pr() -> None:
-    """The PR number is resolved here, not left to gh's own branch lookup.
-
-    Every other PR-scoped helper in the module resolves it the same way, so a
-    branch with no pull request fails with one recognizable error.
-    """
+    """The PR number is resolved from the current branch before gh is called."""
     runner = FakeGh(
         [
             (has("pr", "view"), completed_process(0, json.dumps({"number": 7}))),

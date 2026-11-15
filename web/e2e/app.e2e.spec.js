@@ -24,10 +24,7 @@ test.beforeEach(async ({ page }) => {
  * @param {import('@playwright/test').Page} page - Playwright page instance
  */
 async function runAxeScan(page) {
-    // Match the 20-second timeout used by waitForLoadedStatus(). This helper runs
-    // after an action that sends the analytics worker a fresh view request, and the
-    // loading class clears only after the response. Five seconds was too short for
-    // WebKit with four parallel CI workers.
+    // Waits up to 20 seconds, as waitForLoadedStatus() does, for the loading class to clear.
     await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 20000 });
     await page.waitForFunction(
         () =>
@@ -224,7 +221,7 @@ test("mobile time-range select replaces the chip row on analytics", async ({ pag
     await select.selectOption("all");
     await expect(page).toHaveURL(/range=all/);
 
-    // The label wires an accessible name onto the select; keep the state clean.
+    // The label gives the select an accessible name.
     await runAxeScan(page);
 });
 
@@ -236,8 +233,8 @@ test("shows an error hint for malformed CSV uploads", async ({ page }) => {
 const TELEMETRY_CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
 
 test("telemetry consent: grant, dismiss, and revoke flow", async ({ page }) => {
-    // Force the diagnostics offer without baking a Sentry DSN into the build, so
-    // the banner/footer render but enabling never actually starts the SDK.
+    // Forces the diagnostics offer without a Sentry DSN, so the banner and footer render
+    // and enabling does not start the SDK.
     await page.addInitScript(() => {
         /** @type {Window & { __LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__?: boolean }} */
         const globalWindow = window;
@@ -268,7 +265,7 @@ test("telemetry consent: grant, dismiss, and revoke flow", async ({ page }) => {
         "granted",
     );
 
-    // Consent survives a reload, and the banner no longer re-prompts.
+    // Consent persists across a reload, and the banner stays hidden.
     await page.reload();
     await expect(banner).toBeHidden();
     await expect(toggle).toHaveText(/Turn off/);

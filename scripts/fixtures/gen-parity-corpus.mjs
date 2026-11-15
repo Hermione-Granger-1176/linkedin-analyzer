@@ -9,16 +9,15 @@
  * missing values, impossible dates, long fields, a BOM header, and rows that
  * drop out because a required or all-optional column is missing.
  *
- * The expected output is produced by the web cleaner in
+ * The expected output comes from the web cleaner in
  * web/src/features/cleaning/cleaner.js. The Python parity suite reads the same
- * corpus and asserts its cleaned output equals this expected file, so the two
- * runtimes must agree cell for cell. A cleaning change in one runtime without
- * the other then fails `make test`.
+ * corpus and asserts that its cleaned output equals this expected file, so the
+ * two runtimes must agree cell for cell. A cleaning change in one runtime alone
+ * fails `make test`.
  *
- * Date columns cleaned by cleanDate (Shares/Comments/Messages) use only
- * impossible or unparseable values so they pass through unchanged; a real UTC
- * timestamp would convert to the local timezone and make the checked-in
- * expected file machine dependent. Connections dates carry no timezone.
+ * Date columns cleaned by cleanDate (Shares/Comments/Messages) use only impossible
+ * or unparseable values, so output is the same in every timezone. Connections
+ * dates carry no timezone.
  *
  * Regenerate with: make gen-parity-corpus
  */
@@ -52,8 +51,8 @@ function mulberry32(seed) {
 
 const LONG_FIELD = "L".repeat(300);
 
-// Plain-text payloads routed through trim/clean_value style columns. Each is
-// designed to clean identically in both runtimes.
+// Plain-text payloads for trim-and-clean columns. Each cleans identically in both
+// runtimes.
 const TEXT_PAYLOADS = [
     "Ada Lovelace",
     "  padded value  ",
@@ -108,7 +107,7 @@ const CONNECTION_DATE_PAYLOADS = [
 ];
 
 // Content payloads for cleanMessagesContent (default-parsed types). Interior
-// quotes are written with RFC doubling so the parser yields a single quote.
+// quotes use RFC 4180 doubling.
 const CONTENT_PAYLOADS = [
     "plain content body",
     'says "hi" once',
@@ -161,11 +160,11 @@ function encDefault(value) {
 }
 
 /**
- * Encode one field for the comments CSV (backslash escape char): always escape
- * interior backslashes and quotes with a backslash to match pandas escapechar
- * and the web comments parser, and quote only when the value contains a
- * delimiter, quote, or newline. A value whose only special character is a
- * backslash stays unquoted, so the corpus exercises the unquoted escape path.
+ * Encode one field for the comments CSV, which uses a backslash escape character.
+ * Interior backslashes and quotes are always escaped with a backslash, matching
+ * the Python and web comments parsers. The field is quoted only when it contains
+ * a delimiter, quote, or newline. A value whose only special character is a
+ * backslash stays unquoted, which exercises the unquoted escape path.
  * @param {string} value - Raw field value.
  * @returns {string} CSV-encoded field.
  */

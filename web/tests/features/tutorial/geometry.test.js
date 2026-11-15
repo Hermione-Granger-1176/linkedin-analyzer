@@ -1,8 +1,8 @@
 /**
  * Vitest unit tests for the pure tutorial geometry helpers.
  *
- * These functions were extracted from tutorial.js. They are stateless and take
- * plain rect-like objects, so they can be exercised directly without a DOM.
+ * The functions are stateless and take plain rect-like objects, so they run
+ * without a DOM.
  */
 
 import { describe, expect, it } from "vitest";

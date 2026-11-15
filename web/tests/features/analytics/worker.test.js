@@ -779,9 +779,8 @@ describe("handleRestoreFiles", () => {
 
         await handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
 
-        // restoreFiles only seeds the source datasets; the analytics aggregate is
-        // (re)built and persisted by handleAddFile, so a compute here would be
-        // discarded. It must not run on this path.
+        // restoreFiles only seeds the source datasets. handleAddFile builds and
+        // persists the analytics aggregate, so this path does not call compute.
         expect(LinkedInCleaner.process).toHaveBeenCalledWith("shares", "shares");
         expect(LinkedInCleaner.process).toHaveBeenCalledWith("comments", "comments");
         expect(AnalyticsEngine.compute).not.toHaveBeenCalled();
@@ -1303,8 +1302,8 @@ describe("view cache LRU trimming", () => {
             handleView(i, { timeRange: `${i}m` });
         }
 
-        // Refresh the oldest entry, then cross the cache limit. A real LRU cache
-        // retains the refreshed entry while trimming entries 2 through 21.
+        // Refreshes the oldest entry, then exceeds the limit. Trimming keeps the
+        // refreshed entry and removes entries 2 through 21.
         handleView(51, { timeRange: "1m" });
         AnalyticsEngine.buildView.mockReturnValue({ ...makeView(), _i: 51 });
         handleView(52, { timeRange: "51m" });

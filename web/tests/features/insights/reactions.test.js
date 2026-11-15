@@ -3,9 +3,8 @@ import { describe, expect, it } from "vitest";
 import { generateInsights } from "../../../src/features/analytics/insights.js";
 import { buildInsightReaction } from "../../../src/features/insights/reactions.js";
 
-/* Every id features/analytics/insights.js can put on a card, with the pose it
-   is meant to get. The markers are the parts of the SVG that only that pose
-   carries, so a pose swapped onto the wrong id fails here. */
+/* Each insight id that features/analytics/insights.js can emit, with a marker
+   string from the SVG that only that id's pose contains. */
 const POSED_IDS = [
     ["early-bird", "M55 84 Q40 74 36 60"],
     ["night-owl", "M97 42 H114 V58 Q114 64 105.5 64 Q97 64 97 58 Z"],
@@ -34,23 +33,22 @@ describe("buildInsightReaction", () => {
     it("bobs and blinks on the shared loops rather than loops of its own", () => {
         const markup = buildInsightReaction("trending-up");
 
-        // The stamp's slower pace is a scoped duration override in
-        // features/insights.css, so the classes stay the shared ones.
+        // The slower pace is a scoped duration override in features/insights.css.
+        // The classes are the shared ones.
         expect(markup).toContain('class="pip-bob"');
         expect(markup).toContain('class="pip-blink"');
     });
 
-    /* steady-pace and weekday deliberately share ARMS_THUMBS_UP, so a green run
-       here says every id got the pose it was assigned, not that all twelve
-       poses differ from one another. */
+    /* steady-pace and weekday share ARMS_THUMBS_UP. This test checks that each
+       id gets its assigned pose, not that all twelve poses differ. */
     it.each(POSED_IDS)("gives %s the pose it was assigned", (id, marker) => {
         expect(buildInsightReaction(id)).toContain(marker);
     });
 
     it("covers every insight id the analytics rules can generate", () => {
-        // Drives the rules hard enough to emit all of them at once: a peak hour
-        // of 03:00 for the early bird, a rising trend, a topic shift, a ratio
-        // shift, a light period, a comment-heavy ratio, topics, and a streak.
+        // Input that makes the rules emit every id at once: a peak hour of 03:00
+        // for the early bird, a rising trend, a topic shift, a ratio shift, a
+        // light period, a comment-heavy ratio, topics, and a streak.
         const view = {
             totals: { total: 8, posts: 1, comments: 30 },
             peakHour: { hour: 3 },
@@ -62,9 +60,9 @@ describe("buildInsightReaction", () => {
             streaks: { current: 120 },
         };
         const generated = generateInsights(view).insights.map((insight) => insight.id);
-        // The two rules the above cannot reach at the same time: a peak hour is
-        // one number, so it is early-bird or night-owl or steady-pace, and a
-        // trend runs one way or the other.
+        // These ids cannot fire together with the input above. The peak hour
+        // yields one of early-bird, night-owl, or steady-pace, and the trend
+        // runs in one direction.
         const alternatives = ["night-owl", "steady-pace", "slowing"];
         const posed = POSED_IDS.map(([id]) => id);
 

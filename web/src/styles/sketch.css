@@ -294,7 +294,7 @@
     border-radius: 0 0 4px 4px;
 }
 
-/* Use opaque colors for the two decorative paper elements in dark mode. */
+/* Dark mode uses an opaque fill for error notes. */
 [data-theme="dark"] .error-message {
     background: var(--surface-error);
 }

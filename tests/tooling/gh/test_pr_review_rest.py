@@ -203,7 +203,7 @@ def test_reply_defaults_to_the_current_pr() -> None:
 def test_resolve_numeric_thread_uses_the_rest_thread_route_with_retries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A numeric id resolves through the ccr route, which is idempotent and retried."""
+    """A numeric id resolves through the ccr route and retries a transient failure."""
     monkeypatch.setattr(gh_runner, "_sleep", lambda _seconds: None)
     resolve_outcomes = iter([completed_process(1, "", "HTTP 502"), json_response({})])
     resolve_calls: list[list[str]] = []
@@ -261,10 +261,10 @@ def test_address_numeric_thread_replies_then_resolves() -> None:
 def test_node_ids_explain_the_numeric_route_when_graphql_is_blocked(
     operation: Callable[[FakeGh], None], listing: str
 ) -> None:
-    """A GraphQL node id cannot be used here, and the error names the listing with the right ids.
+    """A GraphQL node ID is rejected, and the error names the listing that shows numeric IDs.
 
-    Thread actions take the thread listing. Deleting a comment takes the comment listing,
-    because the thread listing holds only first comments and cannot name a reply.
+    Thread actions point to the thread listing. Deleting a comment points to the
+    comment listing, which includes replies.
     """
     runner = _sandbox()
 

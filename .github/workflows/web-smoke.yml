@@ -18,8 +18,8 @@ jobs:
     timeout-minutes: 10
     env:
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
-    # Alert jobs key off this so a run that skipped the check never counts as
-    # either a failure or a recovery.
+    # Set to whether the check ran. The alert jobs use it to tell a smoke-check
+    # failure from a setup failure.
     outputs:
       checked: ${{ steps.url.outputs.available }}
     steps:
@@ -71,8 +71,7 @@ jobs:
       state: open
       detail: Review the app shell, security headers, and CSP report endpoint from this run.
 
-  # The check never got far enough to report on production, so this is a
-  # workflow setup failure rather than a smoke-check regression.
+  # Runs when the job failed before the smoke check ran.
   report-setup-failure:
     needs: web-smoke
     if: failure() && needs.web-smoke.outputs.checked != 'true'

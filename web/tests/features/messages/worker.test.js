@@ -85,7 +85,7 @@ describe("messages worker", () => {
         expect(result.connectionError).toBe(null);
     });
 
-    // ── Worker message listener ─────────────────────────────────
+    // Worker message listener
 
     it("worker listener ignores non-process message types", () => {
         // self.addEventListener is registered at module load time; simulate via
@@ -165,7 +165,7 @@ describe("messages worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("processed");
         expect(message.payload.success).toBe(false);
-        // A thrown value can carry a row of the export, so only fixed text leaves.
+        // Only fixed text is posted, never the thrown value.
         expect(message.payload.error).toBe("Messages worker runtime failure.");
 
         postMessageSpy.mockRestore();
@@ -182,7 +182,7 @@ describe("messages worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("processed");
         expect(message.payload.success).toBe(false);
-        // A thrown value can carry a row of the export, so only fixed text leaves.
+        // Only fixed text is posted, never the rejection reason.
         expect(message.payload.error).toBe("Messages worker runtime failure.");
 
         postMessageSpy.mockRestore();

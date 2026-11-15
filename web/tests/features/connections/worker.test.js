@@ -100,7 +100,7 @@ describe("connections worker", () => {
         expect(postMessageSpy).toHaveBeenCalled();
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
-        // A thrown value can carry a row of the export, so only fixed text leaves.
+        // The posted message is fixed text, never the thrown value.
         expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         postMessageSpy.mockRestore();
@@ -116,7 +116,7 @@ describe("connections worker", () => {
         expect(postMessageSpy).toHaveBeenCalled();
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
-        // A thrown value can carry a row of the export, so only fixed text leaves.
+        // The posted message is fixed text, never the thrown value.
         expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         postMessageSpy.mockRestore();
@@ -163,7 +163,7 @@ describe("connections worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
         expect(message.requestId).toBe("conn-fail");
-        // A thrown value can carry a row of the export, so only fixed text leaves.
+        // The posted message is fixed text, never the thrown value.
         expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         processSpy.mockRestore();

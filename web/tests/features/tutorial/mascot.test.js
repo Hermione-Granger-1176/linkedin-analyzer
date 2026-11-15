@@ -1,9 +1,9 @@
 /**
  * Vitest unit tests for Pip's tutorial poses.
  *
- * The mascot is pure decoration, so the tests cover the two things the tutorial
- * engine relies on: the drawing is inert (aria-hidden, unfocusable, carrying no
- * focusable nodes), and the pose and facing attributes flip on demand.
+ * The mascot is decoration. The tests check that the drawing is inert
+ * (aria-hidden, unfocusable, no focusable nodes) and that the pose and facing
+ * attributes flip on demand.
  */
 
 import { afterEach, describe, expect, it } from "vitest";

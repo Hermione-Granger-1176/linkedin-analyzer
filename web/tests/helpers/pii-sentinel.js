@@ -1,10 +1,9 @@
 /**
  * Sentinel helpers for the "no PII reaches telemetry" tests.
  *
- * The Save as PDF path parses raw CSV, holds contact identities and renders
- * message bodies, so any value it catches may carry the user's own text. These
- * helpers build an error that is unmistakably PII-bearing and assert that the
- * error which actually reaches `captureError` is a different, fixed one.
+ * piiError builds an error whose message and properties contain PII_MARKER.
+ * expectFixedError asserts that the value reaching `captureError` is a new
+ * error with no PII_MARKER in its message, stack, or properties.
  */
 
 import { expect } from "vitest";

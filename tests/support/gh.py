@@ -1,7 +1,6 @@
 """Shared fakes for the ``scripts.gh`` test suite.
 
-Kept in a dedicated support module so individual test modules don't import
-helpers from one another.
+Test modules import these helpers from this module.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ import subprocess
 from collections.abc import Callable, Sequence
 from typing import Any
 
-# The refusal this sandbox returns for any call that needs GraphQL.
+# Refusal returned for any call that needs GraphQL in a sandbox that blocks it.
 GRAPHQL_BLOCKED_MESSAGE = (
     "HTTP 403: GitHub GraphQL is not available from Claude Code sessions; use the REST API "
     "(gh api repos/{owner}/{repo}/...). (https://api.github.com/graphql)"
@@ -104,7 +103,7 @@ def sandbox_routes(slug: str = "o/r") -> list[tuple[Callable[[list[str]], bool],
             graphql_blocked(),
         ),
         (has("remote"), completed_process(0, f"https://github.com/{slug}.git\n")),
-        # No branch has a PR recorded by an earlier REST checkout.
+        # git config --get finds no value for any branch.
         (has("config", "--get"), completed_process(1)),
         (has("config"), completed_process(0)),
     ]

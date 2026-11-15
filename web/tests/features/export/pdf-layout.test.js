@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { mixColors, spacerRow, totalRowHeight } from "../../../src/features/export/pdf-layout.js";
 
-// The rest of this module (the page geometry, the line-height conversion and
-// the WCAG contrast helpers) is exercised through pdf-document.test.js, which
-// draws with them. What is left here is the arithmetic no drawing path pins
-// down on its own.
+// Covers the arithmetic in this module. Page geometry, line-height conversion
+// and WCAG contrast helpers are tested through pdf-document.test.js.
 
 describe("mixColors", () => {
     const paper = { r: 255, g: 253, b: 247 };
@@ -25,16 +23,13 @@ describe("mixColors", () => {
     });
 
     it("clamps a blend position outside the unit range", () => {
-        // A heatmap intensity is computed from the data, so an out-of-range
-        // amount must land on an endpoint rather than on channels jsPDF would
-        // reject.
+        // Amounts outside 0..1 clamp to the nearest endpoint.
         expect(mixColors(paper, ink, -3)).toEqual(paper);
         expect(mixColors(paper, ink, 4)).toEqual(ink);
     });
 
     it("blends to nothing for an amount that is not a number", () => {
-        // Clamping alone leaves NaN as NaN, and every channel computed from it
-        // reaches setFillColor(NaN, NaN, NaN).
+        // NaN, Infinity and undefined blend to the first color.
         for (const amount of [Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
             expect(mixColors(paper, ink, amount)).toEqual(paper);
         }
@@ -48,16 +43,14 @@ describe("mixColors", () => {
     });
 
     it("keeps a whisper of ink visible against the paper", () => {
-        // The heatmap draws its empty cells at a twentieth intensity; a mix
-        // that rounded back to the paper colour would leave the grid invisible.
+        // A small amount still yields a color distinct from the first endpoint.
         expect(mixColors(paper, ink, 0.05)).not.toEqual(paper);
     });
 });
 
 describe("spacerRow", () => {
     it("reserves height without drawing anything", () => {
-        // A card's chrome is painted to the height of its rows, so its bottom
-        // padding has to be a row that puts no ink on the page.
+        // A spacer row reserves vertical space and draws nothing.
         const row = spacerRow(3.6);
 
         expect(row.height).toBe(3.6);

@@ -1,7 +1,6 @@
 const zlib = require("zlib");
 
-// jsPDF writes each drawn line as one `(text) Tj` operator inside a content
-// stream, deflated because the export asks for compression.
+// jsPDF writes each drawn line as one `(text) Tj` operator in a deflated content stream.
 const STREAM_START = /stream\r?\n/g;
 const PDF_STRING = /\((?:\\[\s\S]|[^\\()])*\)/g;
 /** @type {Readonly<Record<string, string>>} */
@@ -42,12 +41,11 @@ function decodePdfString(literal) {
 }
 
 /**
- * Read the text a PDF actually draws.
+ * Read the text a PDF draws.
  *
- * Only works for documents drawn with the core fonts: an embedded TrueType
- * subset is written as glyph ids, which say nothing without walking the font's
- * ToUnicode map per resource. The export falls back to Helvetica when the font
- * files cannot be fetched, which is how the spec makes the text readable.
+ * Works only for documents drawn with the core fonts. Embedded TrueType subsets are
+ * written as glyph ids and are not decoded. The export uses Helvetica when the font
+ * files cannot be fetched.
  * @param {Buffer} bytes - Raw PDF file
  * @returns {string} Every drawn string, newline separated
  */

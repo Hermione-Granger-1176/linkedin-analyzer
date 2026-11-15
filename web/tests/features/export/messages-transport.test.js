@@ -33,10 +33,9 @@ const CONNECTIONS_CSV = [
     "Grace,Hopper,https://linkedin.com/in/grace,,Navy,Rear Admiral,02 Feb 2024",
 ].join("\n");
 
-// The shape the messages worker flattens its Maps and Sets into for transport.
-// Every field serializeMessageState writes is here, including the two the
-// dashboard never reads: a fixture that described a smaller worker than the real
-// one would keep passing after the transport stopped carrying them across.
+// The shape the messages worker flattens its Maps and Sets into. Every field
+// serializeMessageState writes is included, even the two the dashboard does not
+// read, so the fixture matches the real worker output.
 const WORKER_MESSAGE_STATE = Object.freeze({
     contacts: [
         {
@@ -79,9 +78,9 @@ const WORKER_CONNECTION_STATE = Object.freeze({
     ],
 });
 
-// What the worker sends for an export with no connections file: it calls
-// buildConnectionState whether or not one was uploaded, and that always answers
-// with a state, so an empty list is the absent case rather than a null.
+// What the worker sends for an export with no connections file.
+// buildConnectionState always returns a state, so an empty list means absent,
+// not null.
 const EMPTY_WORKER_CONNECTION_STATE = Object.freeze({ list: [] });
 
 const harness = createWorkerHarness();
@@ -168,9 +167,8 @@ describe("loadMessagesState", () => {
     });
 
     it("carries no connection state when a reply leaves it out entirely", async () => {
-        // The messages contract passes its payload through without normalizing
-        // the fields on it, so this arm answers for a reply the real worker does
-        // not send: the dashboard still gets a state it can read.
+        // A reply without connectionState leaves it null. The contract does not
+        // normalize payload fields, and the real worker always sends the field.
         const pending = loadMessagesState(MESSAGES_CSV, "");
         replyToRequest({ success: true, messageState: WORKER_MESSAGE_STATE });
 
@@ -221,9 +219,8 @@ describe("loadMessagesState", () => {
     });
 
     it("builds the state on the main thread when the platform has no worker", async () => {
-        // The bug this module exists to fix: borrowing the Messages screen's
-        // fallback answered with cleaned rows and left the state to its caller,
-        // so the dashboard quietly disappeared on any browser without workers.
+        // Builds the state on the main thread, from the same parse, when Workers
+        // are missing.
         harness.uninstall();
 
         const state = await loadMessagesState(MESSAGES_CSV, CONNECTIONS_CSV);
@@ -254,8 +251,8 @@ describe("loadMessagesState", () => {
     });
 
     it("refuses the main-thread fallback for very large exports", async () => {
-        // Re-parsing this on the UI thread would freeze the page, so the export
-        // drops the dashboard rather than blocking on it.
+        // Exports above the size ceiling are not parsed on the UI thread. The
+        // dashboard is dropped instead.
         harness.uninstall();
         const huge = `${MESSAGES_CSV}\n${"# padding\n".repeat(600000)}`;
 
@@ -264,10 +261,8 @@ describe("loadMessagesState", () => {
     });
 
     it("counts the connections file against the fallback ceiling too", async () => {
-        // The ceiling is the sum of both files, because the fallback parses
-        // both, but every other ceiling test passes an empty connections file
-        // and leaves that second term free. Neither file here would trip the
-        // ceiling alone; together they would freeze the UI thread.
+        // The ceiling is the sum of both files, since the fallback parses both.
+        // Neither file alone exceeds it, but together they do.
         harness.uninstall();
         const padding = "# padding\n".repeat(320000);
         const messages = `${MESSAGES_CSV}\n${padding}`;
@@ -280,9 +275,8 @@ describe("loadMessagesState", () => {
     });
 
     it("still builds on the main thread just under the fallback ceiling", async () => {
-        // The positive control for the test above: same padded shape, only
-        // shorter. Without this, a null there could equally mean the padding
-        // broke the parser, and deleting the size guard would not fail.
+        // Positive control for the test above: same padded shape, under the
+        // ceiling. Without it, a null could mean the padding broke the parser.
         harness.uninstall();
         const padded = `${MESSAGES_CSV}\n${"# padding\n".repeat(10)}`;
 
@@ -304,9 +298,8 @@ describe("loadMessagesState", () => {
     });
 
     it("does not re-parse on the main thread when the worker answers with no state", async () => {
-        // A success carrying no state is the worker saying this file holds no
-        // messages, and it said so from the same parse of the same bytes the
-        // main thread would have to redo.
+        // A success with no state means the worker found no messages. Parsing
+        // again on the main thread would repeat the same parse.
         const pending = loadMessagesState(MESSAGES_CSV, "");
         replyToRequest({ success: true, messageState: null });
 
@@ -314,11 +307,10 @@ describe("loadMessagesState", () => {
     });
 
     it("settles a reply whose payload the contract parser emptied", async () => {
-        // The parser accepts the envelope and nulls a payload that is not a
-        // plain object, so an otherwise well-formed reply can arrive with
-        // nothing on it. Reading through that would throw inside a listener,
-        // where nothing is waiting to catch it, and leave the request to time
-        // out; no timer is advanced here, so a hang fails the test.
+        // The parser nulls a payload that is not a plain object, so the reply
+        // carries nothing. Reading through it would throw inside a listener and
+        // leave the request to time out. No timer is advanced, so a hang fails
+        // the test.
         vi.useFakeTimers();
         const pending = loadMessagesState(MESSAGES_CSV, "");
         const [request] = harness.instance.postMessage.mock.calls[0];
@@ -338,9 +330,8 @@ describe("loadMessagesState", () => {
     });
 
     it("does not re-parse on the main thread when the worker reports failure", async () => {
-        // The worker has already run this exact CSV through this exact code and
-        // reported that it cannot parse it; the main thread would only freeze
-        // the page to reach the same answer.
+        // The worker already parsed this CSV and reported failure. Parsing again
+        // on the main thread would reach the same answer.
         const pending = loadMessagesState(MESSAGES_CSV, "");
         replyToRequest({ success: false, error: "bad csv" });
 
@@ -353,25 +344,23 @@ describe("loadMessagesState", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // An unknown request id does not establish a parse failure for this file.
-        // Permit the small-file fallback and settle without advancing the timer.
+        // An unknown request id does not count as a parse failure for this file,
+        // so the small-file fallback runs.
         vi.useFakeTimers();
         const pending = loadMessagesState(MESSAGES_CSV, "");
         replyToRequest({ success: false, error: "invalid request" }, 99);
         vi.useRealTimers();
 
-        // Two contacts, because the main thread parsed the whole file: the
-        // worker fixture elsewhere in this suite carries only the first.
+        // Expects two contacts from the full main-thread parse. The worker
+        // fixture carries only one.
         expect((await pending).messageState.contacts.size).toBe(2);
         expect(harness.instance.terminate).toHaveBeenCalled();
     });
 
     it("answers a crash the same way whichever of its two routes lands first", async () => {
-        // A crash inside this worker reaches the main thread twice over: as the
-        // posted failure envelope under id zero, and as a propagated error event
-        // on the Worker object, which this worker does not cancel. Nothing in
-        // the spec orders the two, so what the export does must not depend on
-        // which one wins.
+        // A crash reaches the main thread as a failure envelope under id 0 and as
+        // an error event on the Worker object. The two may arrive in either
+        // order, and the outcome must not depend on which arrives first.
         const postCrashEnvelope = (worker) => {
             worker.emit("message", {
                 data: {
@@ -398,7 +387,7 @@ describe("loadMessagesState", () => {
             outcomes.push(await pending);
         }
 
-        // Both fall back, because neither route said anything about the file.
+        // Both routes fall back to the main thread.
         expect(outcomes.map((state) => state.messageState.contacts.size)).toEqual([2, 2]);
     });
 
@@ -435,9 +424,8 @@ describe("loadMessagesState", () => {
     it("cancels a worker error event so the browser cannot report it", async () => {
         const preventDefault = vi.fn();
         const pending = loadMessagesState(MESSAGES_CSV, "");
-        // An uncancelled error event on a Worker is reported by the browser
-        // itself, and that report reaches the console with the worker's own
-        // message - here, text parsed straight out of the messages CSV.
+        // An uncancelled error event is logged by the browser, with the worker's
+        // message. Here that message could hold text from the messages CSV.
         harness.instance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
         await pending;
 
@@ -459,11 +447,9 @@ describe("loadMessagesState", () => {
     });
 
     it("scales the watchdog with the size of both files", async () => {
-        // The Messages screen's own budget for this same worker: 30s base plus
-        // 5s per whole megabyte of the two files it parses. Scaled to the
-        // messages export alone, the watchdog fired early on a large
-        // connections file and sent a parse the worker was still doing to the
-        // UI thread, so the padding here is on the connections side.
+        // The budget is 30s base plus 5s per whole megabyte of both files. The
+        // padding is on the connections side, so a budget scaled only to the
+        // messages file would fail this test.
         vi.useFakeTimers();
         const threeMb = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);
@@ -486,9 +472,8 @@ describe("loadMessagesState", () => {
     });
 
     it("scales the watchdog with the messages file as well", async () => {
-        // The other half of the test above. Proven on the connections side
-        // alone, a budget computed from the connections file only would pass,
-        // and a large messages export would get 30s and time out mid-parse.
+        // The other half of the test above. The padding is on the messages side,
+        // so the budget must count that file too.
         vi.useFakeTimers();
         const threeMb = `${MESSAGES_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);
@@ -536,9 +521,8 @@ describe("loadMessagesState", () => {
     });
 
     it("ends an earlier request rather than letting two share the worker", async () => {
-        // Both requests would otherwise own the same module-level watchdog and
-        // settle hook, and whichever the worker answered first would clear the
-        // other's, leaving that promise pending for the life of the page.
+        // A new request ends the earlier one, so the two never share the
+        // module-level watchdog and settle hook.
         const first = loadMessagesState(MESSAGES_CSV, "");
         const worker = harness.instance;
         const second = loadMessagesState(MESSAGES_CSV, "");
@@ -552,8 +536,7 @@ describe("loadMessagesState", () => {
             },
         });
 
-        // The cancelled one resolves rather than hanging, and does not re-run
-        // the abandoned work on the UI thread.
+        // The cancelled request resolves to null and does not run on the UI thread.
         expect(await first).toBeNull();
         expect((await second).messageState.contacts.size).toBe(1);
     });
@@ -587,10 +570,8 @@ describe("loadMessagesState", () => {
         expect(worker.postMessage).toHaveBeenCalled();
 
         terminateMessagesWorker();
-        // No timer is advanced and no event is emitted: terminating removed
-        // every one of them, so cancellation alone has to end the request. Left
-        // pending, its frame keeps the raw messages CSV alive for the life of
-        // the page.
+        // No timer is advanced and no event is emitted. Termination removes every
+        // listener, so cancelling alone settles the request.
         expect(await pending).toBeNull();
         expect(vi.getTimerCount()).toBe(0);
         expect(captureError).not.toHaveBeenCalled();

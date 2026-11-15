@@ -1,10 +1,9 @@
 /**
  * Job bookkeeping helpers for upload processing.
  *
- * Worker replies may arrive without a job ID (or with a stale one), so these
- * helpers resolve which in-flight job a message belongs to. The collections are
- * passed in rather than owned here, keeping the upload page the single owner of
- * job state and these helpers free of hidden state.
+ * Worker replies may arrive without a job ID or with a stale one. These helpers
+ * resolve which in-flight job a message belongs to. The collections are passed
+ * in. The upload page owns job state, and these helpers hold none.
  */
 
 /**
@@ -96,10 +95,8 @@ function resolvePendingJobIdByFileName(pendingFiles, fileName) {
 /**
  * Resolve the sole active job ID as a final fallback.
  *
- * Only resolves when exactly one job is in flight: a worker message that
- * lacks both a jobId and a matching fileName is unambiguous in that case.
- * With concurrent uploads, guessing the "first" job would complete the wrong
- * file, so we return null and let that job's watchdog handle it instead.
+ * Only resolves when exactly one job is in flight. Returns null when several
+ * jobs are in flight, leaving the message to that job's watchdog.
  * @param {Set<string>} activeJobs - In-flight job IDs
  * @returns {string|null}
  */

@@ -259,7 +259,7 @@ describe("CleanPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
-        // The thrown value can carry a row of the file, so only fixed text is shown.
+        // Only fixed text is shown, never the thrown value.
         expect(document.getElementById("cleanErrorText").textContent).toContain(
             "Error generating Excel: Unable to parse file.",
         );

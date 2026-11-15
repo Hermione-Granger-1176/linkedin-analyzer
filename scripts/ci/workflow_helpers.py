@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Small, tested helpers for GitHub Actions workflows.
 
-The workflow shell should stay thin: trust-boundary decisions and downloaded
-artifact validation live here so automated writebacks can reuse the same checks.
+Trust-boundary decisions and downloaded-artifact validation live here, and
+automated writebacks reuse these checks.
 """
 
 from __future__ import annotations
@@ -40,8 +40,8 @@ def append_github_output(lines: Iterable[str], *, env: Mapping[str, str] | None 
 def report_checked(reached_verdict: bool, *, env: Mapping[str, str] | None = None) -> None:
     """Record whether a check reached a verdict, for the calling workflow to read.
 
-    Make converts failing recipe statuses to 2, so exit codes cannot distinguish
-    a finding from a failure to look. The workflow reads this output to select the
+    Make reports a failing recipe as exit status 2, so exit codes cannot tell a
+    finding from a failure to check. The workflow reads this output to choose the
     alert type.
     """
     value = "true" if reached_verdict else "false"

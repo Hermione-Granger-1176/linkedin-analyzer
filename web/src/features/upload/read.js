@@ -2,10 +2,10 @@
  * File-to-text reading for uploads.
  *
  * Picks between a streaming read for large files and a FileReader read for
- * small ones, then hands the raw bytes to the shared decoder. Every function
- * here derives its result from its arguments and holds no upload page state,
- * so the page owns orchestration and this module owns only how bytes are read.
- * Nothing here touches the DOM, so the analytics worker reads uploads with it.
+ * small ones, then hands the raw bytes to the shared decoder. Functions here
+ * derive their results from their arguments and hold no upload page state.
+ * The page owns orchestration, and this module owns how bytes are read.
+ * Nothing here touches the DOM. The analytics worker uses this module.
  */
 
 import { toCsvSource } from "../../shared/csv-source.js";
@@ -24,7 +24,7 @@ const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
 /**
  * Read a File object as text, decoding as UTF-8 and falling back to
- * WHATWG windows-1252 for non-UTF-8 exports, matching the CLI.
+ * WHATWG windows-1252 for non-UTF-8 exports.
  * @param {File} file - Uploaded file
  * @param {ReadOptions} [options] - Cancellation and progress hooks
  * @returns {Promise<{text: string, usedFallback: boolean}>}
@@ -52,9 +52,8 @@ export function readFileAsText(file, options = {}) {
 }
 
 /**
- * Read a worker's CSV source as text. Text passes through unchanged; a stored
- * upload Blob is decoded the same way an upload is, so every screen sees the
- * text the upload produced.
+ * Read a worker's CSV source as text. Text passes through unchanged. A stored
+ * upload Blob is decoded the same way an upload is.
  * Anything else reads as empty text.
  * @param {unknown} source - Stored upload or CSV text
  * @returns {Promise<string>}
@@ -118,8 +117,7 @@ function abortError(file) {
 }
 
 /**
- * Read a File as text via FileReader, decoding the raw bytes so UTF-8
- * validity is checked directly rather than inferred from the output.
+ * Read a File as text via FileReader. UTF-8 validity is checked on the raw bytes.
  * @param {File} file - Uploaded file
  * @param {ReadOptions} options - Cancellation and progress hooks
  * @returns {Promise<{text: string, usedFallback: boolean}>}
@@ -165,10 +163,9 @@ function readBytesWithReader(file) {
             if (settled) {
                 return;
             }
-            // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
-            // pitfalls): a successful read yields a byte buffer, so anything
-            // without a numeric byteLength is an unexpected/failed read and is
-            // reported as an error rather than treated as an empty file.
+            // Duck-type the result instead of using instanceof. A successful read
+            // yields a byte buffer. Anything without a numeric byteLength is
+            // reported as an error, not as an empty file.
             const buffer = /** @type {ArrayBuffer} */ (reader.result);
             if (!buffer || typeof buffer.byteLength !== "number") {
                 finish(() => reject(new Error("Error reading file")));
@@ -218,9 +215,8 @@ async function readFileAsTextStream(file, { signal, onProgress }) {
             }
         }
 
-        // The in-loop check above throws first when the watchdog fires mid-read;
-        // this post-loop check only trips if the final read completes (done) in
-        // the same tick the watchdog fires, which the unit clock does not stage.
+        // The in-loop check throws when the watchdog fires mid-read. This check
+        // covers a final read that finishes in the same tick as the watchdog.
         /* v8 ignore next 3 */
         if (timedOut) {
             throw new Error(`Reading ${file.name} timed out.`);
@@ -261,8 +257,8 @@ export function canStreamFileText(file) {
  * Decodes as strict UTF-8 in streaming mode. On a decode error it calls
  * onRestart and reads the File again from the start as windows-1252, matching
  * decodeBytes(). The character limit applies as a running count with the same
- * message. The timeout applies to each chunk read rather than the whole file,
- * because the caller may parse and clean between chunks.
+ * message. The timeout applies to each chunk read rather than the whole file.
+ * The caller may parse and clean between chunks.
  * @param {File} file - Uploaded file
  * @param {StreamTextOptions} options - Chunk, restart, cancellation, and progress hooks
  * @returns {Promise<{usedFallback: boolean}>}
@@ -293,8 +289,7 @@ function readChunkWithTimeout(reader, file) {
     /** @type {Promise<never>} */
     const timeout = new Promise((_resolve, reject) => {
         timeoutId = globalThis.setTimeout(() => {
-            // Reject first: cancelling settles the pending read with done, which
-            // would otherwise win the race and pass a partial file as complete.
+            // Reject before cancelling: the reader's done result must not win the race.
             reject(new Error(`Reading ${file.name} timed out.`));
             cancelReader(reader);
         }, FILE_READ_TIMEOUT_MS);

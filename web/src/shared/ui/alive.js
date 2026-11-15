@@ -2,8 +2,8 @@
 
    The drawing is aria-hidden. Reduced motion is checked when each animation
    starts, so a preference change applies to the next animation. Gaze is disabled
-   on touch devices. Timers remove one-shot classes because hidden SVG elements do
-   not reliably emit animationend. */
+   on touch devices. Timers remove one-shot classes, since animationend does not
+   reliably fire on hidden SVG elements. */
 
 import { prefersReducedMotion } from "./motion.js";
 
@@ -18,12 +18,12 @@ const IDLE_DELAY_MS = 20000;
 const IDLE_DOODLE_MS = 2600;
 const WAKE_MS = 800;
 
-/* Maximum gaze offsets in viewBox units. Limit vertical movement to the
-1.3 units below the brows so the pupils do not touch them. */
+/* Maximum gaze offsets in viewBox units. The vertical offset stays inside the
+1.3 units of room below the brows. */
 const GAZE_TRAVEL_X = 1.6;
 const GAZE_TRAVEL_Y = 0.8;
-/* The pointer distance at which the gaze is already all the way over. Past this
-   Pip is looking as far as he is going to look. */
+/* Pointer distance at which the gaze reaches full travel. Farther pointers do not
+   move the pupils further. */
 const GAZE_REACH_PX = 280;
 
 const ACTIVITY_EVENTS = Object.freeze(["pointermove", "pointerdown", "keydown", "wheel"]);
@@ -33,12 +33,11 @@ let idleTimer = 0;
 let doodleTimer = 0;
 let wakeTimer = 0;
 let gazeFrame = 0;
-/* Where the pointer was last seen, and whether it has ever been seen at all. A
-   scroll aims at that same position, and before the first move there is no
-   position to aim at, only the origin. */
+/* Last seen pointer position, and whether a pointer has been seen. Scrolls reuse
+   this position. Before the first move it stays at the origin. */
 const pendingPointer = { x: 0, y: 0 };
 let pointerSeen = false;
-/* Whether a yawn is active. Avoid repeated DOM updates from activity events. */
+/* Whether a yawn is active. Activity events skip DOM updates while it is false. */
 let bored = false;
 
 /**
@@ -58,9 +57,7 @@ function heroElement() {
 }
 
 /**
- * Check whether the Home screen is the one currently on show. Pip should not be
- * yawning at a screen nobody can see, and an animation started on a hidden
- * screen would not run anyway.
+ * Check whether the Home screen is the one currently on show.
  * @returns {boolean} True when the Home screen is the active route screen.
  */
 function homeIsVisible() {
@@ -99,8 +96,7 @@ function applyGaze() {
     }
 
     const rect = hero.getBoundingClientRect();
-    // A hidden or zero-width drawing has no useful gaze position. Reset its
-    // offset before returning.
+    // A hidden or zero-width drawing resets the gaze offset and returns.
     if (!rect.width || !rect.height) {
         gaze.style.transform = "";
         return;
@@ -137,9 +133,7 @@ function handlePointerMove(event) {
 }
 
 /**
- * Aim the eyes again after a scroll. The pointer has not moved, but the hero has
- * moved under it, so the offset the pupils are holding is aimed at where the
- * pointer used to be relative to the drawing.
+ * Re-aims the eyes after a scroll, since the hero moves under a stationary pointer.
  * @returns {void}
  */
 function handleScroll() {
@@ -159,7 +153,7 @@ function playIdleDoodle() {
     }
     const hero = heroElement();
     if (!hero || !homeIsVisible()) {
-        // Nothing to yawn at. Any activity re-arms the timer from scratch.
+        // No hero, or the Home screen is not visible. Activity re-arms the timer.
         return;
     }
     window.clearTimeout(doodleTimer);

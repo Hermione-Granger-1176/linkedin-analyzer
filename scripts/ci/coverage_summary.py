@@ -5,8 +5,8 @@ The suites enforce their coverage thresholds. This module displays their totals
 on the workflow run page without adding another pass or fail condition.
 
 Counts come from pytest-cov's ``.artifacts/coverage/python-coverage.json`` and
-Vitest's ``coverage/coverage-summary.json``. The summary calculates percentages
-from covered and total counts so each row uses consistent values.
+Vitest's ``coverage/coverage-summary.json``. Percentages are computed from the
+covered and total counts.
 
 A missing report produces a note because the summary runs even after test
 failures. A report that exists but cannot be read produces an error.
@@ -20,15 +20,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# Relative to the repository root, which is where the Makefile runs this. The
-# Python report lives outside coverage/ on purpose: Vitest wipes that directory
-# before its own run, and ci-heavy-checks runs both suites in parallel.
+# Relative to the repository root, where the Makefile runs this. The Python report
+# is kept outside coverage/, which Vitest clears before its run.
 DEFAULT_PYTHON_REPORT = Path(".artifacts") / "coverage" / "python-coverage.json"
 DEFAULT_JS_REPORT = Path("coverage") / "coverage-summary.json"
 
-# The metrics Vitest reports, in the order they are shown. Its `branchesTrue`
-# entry is deliberately absent: it counts only implicit else branches and reads
-# as 100% of zero on this codebase.
+# The metrics Vitest reports, in the order they are shown. `branchesTrue` is
+# omitted: it counts only implicit else branches, so it reads as 100% of zero here.
 JS_METRICS = ("statements", "branches", "functions", "lines")
 
 # pytest-cov names the same two counts differently, and reports no function or
@@ -86,7 +84,7 @@ def _load_object(path: Path, section: str) -> dict[str, object]:
 def _count(block: dict[str, object], key: str, path: Path) -> int:
     """Return one non-negative integer count from a coverage report block."""
     value = block.get(key)
-    # bool is a subclass of int, so it would otherwise pass as a count of 1.
+    # bool is excluded because it subclasses int.
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"Coverage report {path} has no non-negative integer {key!r}.")
     return value

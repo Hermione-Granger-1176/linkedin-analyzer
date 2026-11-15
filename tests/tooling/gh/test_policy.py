@@ -17,7 +17,7 @@ from scripts.lib import gh_policy
         ("502 Bad Gateway", "transient"),
         ("504 Gateway Time-out", "transient"),
         ("HTTP 500: Internal Server Error", "transient"),
-        # 501 stays fatal: "Not Implemented" never clears on a retry.
+        # 501 is classified as fatal, not transient.
         ("HTTP 501: Not Implemented", "fatal"),
         ("HTTP 429: Too Many Requests", "rate_limit"),
         ("429 Too Many Requests", "rate_limit"),
@@ -26,7 +26,7 @@ from scripts.lib import gh_policy
             "use the REST API (https://api.github.com/graphql)",
             "graphql_unavailable",
         ),
-        # An ordinary 403 is not a blocked GraphQL endpoint and must not switch paths.
+        # A plain 403 is fatal and does not select the REST path.
         ("HTTP 403: Forbidden", "fatal"),
     ],
 )
@@ -42,8 +42,7 @@ def test_classify_gh_failure_covers_each_shared_outcome(message: str, expected: 
         "error: parse failure at line 503, column 12",
         "Validation failed: body is limited to 504 characters",
         "Not Found (HTTP 404): run 5021 does not exist",
-        # A bare 429 must not be read as a rate limit either: that would abort
-        # with a misleading "wait for the window to reset" message.
+        # A bare 429 inside other text is not a rate limit.
         "fatal: could not read object 429fe0c",
         "error: workflow run 429 was not found",
     ],
@@ -54,14 +53,14 @@ def test_classify_gh_failure_does_not_match_bare_status_lookalikes(message: str)
 
 
 def test_rate_limit_rule_wins_when_message_mentions_http_403() -> None:
-    """A rate limit remains fail-fast even when GitHub returns it as a 403."""
+    """A rate limit message that also mentions HTTP 403 is classified as rate_limit."""
     assert gh_policy.classify_gh_failure("API rate limit exceeded (HTTP 403)") == "rate_limit"
 
 
 def test_retry_backoff_seconds_is_exponential_jittered_and_capped() -> None:
     """The shared backoff has deterministic bounds when its random seam is injected."""
     assert gh_policy.DEFAULT_GH_RETRIES == 2
-    # A 1.0s base preserves the delay the gh wrappers used before extraction.
+    # The base delay is 1.0s.
     assert gh_policy.retry_backoff_seconds(0, random_fn=lambda: 0) == 1.0
     assert gh_policy.retry_backoff_seconds(1, random_fn=lambda: 1) == 2.5
     assert (

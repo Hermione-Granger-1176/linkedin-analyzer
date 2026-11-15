@@ -436,8 +436,7 @@ describe("AnalyticsPage", () => {
         await loading;
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Posting would hand the read to a terminated worker and arm a
-        // watchdog over the error the screen is already showing.
+        // The dropped load posts nothing to the terminated worker and arms no watchdog.
         expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
             expect.objectContaining({ type: "initBase" }),
         );
@@ -454,9 +453,8 @@ describe("AnalyticsPage", () => {
         expect(firstWorker).toBeTruthy();
         firstWorker.terminate = vi.fn();
 
-        // The worker dies. Regression: the handler must tear it down, otherwise
-        // initWorker() early-returns on the live reference and the next load posts
-        // to a dead worker (and the stale watchdog later overwrites the screen).
+        // The worker dies. The error handler terminates it, so the next load
+        // builds a new worker instead of reusing the dead reference.
         workerInstance.listeners.error[0](new Event("error"));
         expect(firstWorker.terminate).toHaveBeenCalled();
 
@@ -987,7 +985,7 @@ describe("AnalyticsPage", () => {
             data: { type: "init", payload: { hasData: false } },
         });
 
-        // Now analyticsReady=true, hasData=false → second call hits line 150
+        // Now the worker is ready and hasData is false, so the second call shows the empty state.
         AppRouter.getCurrentRoute.mockReturnValue({ name: "analytics", params: {} });
         await AnalyticsPage.onRouteChange({});
 

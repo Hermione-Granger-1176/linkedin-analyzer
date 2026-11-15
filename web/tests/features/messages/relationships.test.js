@@ -1,7 +1,7 @@
 /**
  * Vitest unit tests for the pure relationship queries over messages and
- * connections state. These were extracted from the messages screen and take
- * plain state objects, so they run without a DOM.
+ * connections state. The queries take plain state objects, so they run without
+ * a DOM.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

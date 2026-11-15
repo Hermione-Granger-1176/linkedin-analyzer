@@ -13,10 +13,8 @@ import { FILE_TYPES as SHARED_FILE_TYPES } from "../../shared/constants.js";
  * @typedef {"shares"|"comments"|"messages"|"connections"} FileType
  */
 
-// Re-exported so existing `import { FILE_TYPES } from "./configs.js"`
-// call sites keep working; the canonical definition lives in constants.js, a
-// dependency-free module that stays out of the worker bundle graph. Same array,
-// narrowed to the FileType union.
+// The canonical list lives in constants.js. This re-export narrows the same
+// array to the FileType union.
 export const FILE_TYPES = /** @type {readonly FileType[]} */ (SHARED_FILE_TYPES);
 
 /**

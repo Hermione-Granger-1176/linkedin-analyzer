@@ -1,8 +1,8 @@
 /**
  * Select recent threads for the PDF in a worker.
  *
- * Both input files may appear in thrown values. serveWorker sends fixed
- * failure messages and cancels global error reporting.
+ * Thrown values can contain either input file, so serveWorker sends fixed
+ * failure messages only and cancels global error reporting.
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.ts";
@@ -19,10 +19,9 @@ import { selectRecentThreadRows, selectRecentThreads } from "./threads.js";
 const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
 /**
- * Derive account-owner tiebreak keys from the connections source.
- * Parse in the worker so large files do not block cancellation on the page.
- * If the file fails, keep thread selection available with unknown direction
- * where the account owner cannot otherwise be identified. Discard error details.
+ * Derive account-owner tiebreak keys from the connections source, parsed in the
+ * worker. If the file fails, thread selection continues with unknown direction
+ * where the account owner cannot be identified. Error details are discarded.
  * @param {unknown} connectionsSource - Stored connections Blob or CSV text
  * @returns {Promise<string[]>} Normalized keys, empty when there are none to be had
  */
@@ -50,8 +49,7 @@ async function streamRecords(file, onRecord, onRestart) {
 
 /**
  * First pass: every export row without its body, and the number of the record
- * each row came from. Selection needs every row but none of the bodies, which
- * are most of the file.
+ * each row came from. Selection needs every row but no bodies.
  * @param {File} file - Stored messages upload
  * @returns {Promise<{rows: import("./messages-parse.js").MessageRow[], records: number[]}|null>} Null when the stream cannot finish as a messages file
  */
@@ -142,7 +140,7 @@ async function selectFromStream(file, connectionsSource, limits) {
  * Parse the messages CSV and pick the recent threads for the export. Each
  * file arrives as the stored upload Blob, read or streamed here, or as CSV
  * text. When a stored upload cannot be streamed as a messages file, it is
- * read whole and parsed that way instead, so failures and their messages match.
+ * read whole and parsed that way instead.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
  * @returns {Promise<{success: boolean, threads: import("./threads.js").SelectedThread[], error: string|null}>}
  */

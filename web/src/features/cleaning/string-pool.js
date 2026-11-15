@@ -6,13 +6,11 @@
  * string and skip repeated cleaning work.
  *
  * Dates and message bodies rarely repeat. Each column checks windows of values
- * and stops caching when a window contains mostly distinct values. This also
- * handles columns whose values stop repeating partway through a file.
+ * and stops caching once a window is mostly distinct values. Columns whose
+ * values stop repeating partway through a file are handled the same way.
  *
- * A cached value is stored as a copy. A value sliced out of a decoded chunk
- * can keep that whole chunk alive, and one cached slice per distinct value
- * would hold most of the file's text. Values that are not cached are left
- * as they are because copying them increased time and memory in measurements.
+ * A cached value is stored as a copy that does not share memory with the
+ * decoded chunk it came from. Values that are not cached are not copied.
  */
 
 /** Number of values sampled per column before checking the distinct-value share. */

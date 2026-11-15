@@ -12,7 +12,7 @@ Install these tools before you set up the checkout:
 - `make` and Git.
 - Docker when you want to run the hosted Playwright container or build the CLI image.
 
-The default local Python version is 3.14. The lockfile resolves across Python 3.12 through 3.14, and CI tests all three versions.
+The default local Python version is 3.14. The lockfile resolves across Python 3.12 through 3.14.
 
 ## Set up a checkout
 
@@ -30,7 +30,7 @@ Install the local Git hooks when you plan to commit:
 make install-hooks
 ```
 
-The hooks call Make targets for Python linting, formatting, type checking, Python tests, JavaScript linting, JavaScript formatting, web type checking, and JavaScript tests.
+The hooks run the lint, format, type, and test targets for Python and JavaScript.
 
 Use the full setup when the host already has the system libraries that Playwright needs:
 
@@ -46,9 +46,11 @@ make playwright-local-status
 make playwright-local-gate
 ```
 
-The local runtime extracts package files under the ignored `.playwright/` directory. It does not install system packages, change the system package database, or touch the shared Playwright browser cache. Pass `local_libs=1` to browser-running targets after the runtime is ready.
+The local runtime extracts package files under the ignored `.playwright/` directory. It does not install system packages or change the system package database. It reads browsers from Playwright's shared cache and never downloads packages during a test run. Pass `local_libs=1` to browser-running targets after the runtime is ready.
 
-Use `make setup-ci` only on a disposable runner where Playwright can install operating-system dependencies. Hosted GitHub Actions uses `make test-e2e-container` instead.
+Use `make playwright-local-clean` or `make clean` to remove this repository's private runtime. Neither target removes the shared browser cache.
+
+Use `make setup-ci` only on a disposable runner where Playwright can install operating-system dependencies. Hosted CI runs browser tests in a container instead.
 
 ### Select browser engines
 
@@ -59,11 +61,7 @@ make setup-playwright-engines engines=chromium
 make setup-playwright-engines engines=chromium-webkit
 ```
 
-The accepted engine names are `chromium`, `firefox`, and `webkit`. Use `with_deps=1` only on an ephemeral runner where the target is allowed to install operating-system dependencies. Browser-running targets accept `local_libs=1`, including `make test-e2e`, `make test-e2e-headed`, `make test-e2e-ui`, and `make web-screens`.
-
-The repository-local runtime keeps extracted libraries, browser data, configuration, and temporary files under the ignored `.playwright/` directory. It reuses browsers from Playwright's shared cache and never downloads packages during a test run.
-
-Use `make playwright-local-clean` or `make clean` to remove this repository's private runtime. Neither target removes the shared browser cache.
+The accepted engine names are `chromium`, `firefox`, and `webkit`. Use `with_deps=1` only on an ephemeral runner where the target is allowed to install operating-system dependencies.
 
 ## Choose a Python version
 
@@ -159,15 +157,13 @@ Run the dependency and override policy checks:
 make security
 ```
 
-Use `make audit-node audit_level=high` for a focused local review. The CI policy runs `make audit-node` without an `audit_level` override. Review `config/security_audit.json` before adding or changing an exception.
+Use `make audit-node audit_level=high` for a focused local review. Use `make audit-fix-node` only when an audit identifies an automatically fixable Node advisory. Then review the lockfile and rerun `make security`. The Python audit keeps strict skipped-dependency behavior.
 
-Use `make audit-fix-node` only when an audit identifies an automatically fixable Node advisory, then review the lockfile and rerun `make security`. Exceptions are ecosystem-specific, time-bounded, and fail closed when they expire, become unused, become ambiguous, or have a fix available when `ignore_only_without_fix` is enabled. The Python audit also keeps strict skipped-dependency behavior.
+Audit exceptions live in `config/security_audit.json`. See [supply chain](ci.md#protect-the-supply-chain) for the entry format and expiry rules.
 
-The `tool.uv.required-version` setting in `pyproject.toml` is a minimum version, not an exact pin. Raise that floor only when a repository feature needs a newer `uv`. The Python lockfile remains the source of dependency resolution, while the monthly action refresh intentionally leaves the `uv` floor unchanged.
+The `tool.uv.required-version` setting in `pyproject.toml` is a minimum version, not an exact pin. Raise it only when a repository feature needs a newer `uv`.
 
 ## Run common checks
-
-Run one layer when you are iterating:
 
 ```bash
 make lint-py
@@ -177,27 +173,18 @@ make typecheck-py
 make typecheck-web
 make test-py
 make test-js
-```
-
-Run the full non-browser gate:
-
-```bash
+make ci-fast
 make ci
+make check
 ```
 
-Run the same quick and heavy order used by the primary CI workflow:
-
-```bash
-make ci-platform-checks
-```
-
-Use `make ci-fast` when you want the non-browser checks in parallel without the web build size check. Use `make check` when you also want browser tests.
+See [testing](testing.md) for what each target covers.
 
 ## Keep Make references valid
 
-Documentation, workflow shell commands, and backticked source comments must use real Make targets. `make lint-doc-commands` checks contributor-facing files, while `make lint-make-targets` checks target names throughout the repository and rejects new raw shell control flow in recipes. Put a Make target name in backticks when it appears inside a source comment, docstring, or string so the checker can distinguish it from ordinary prose.
+Docs, workflow shell commands, and backticked source comments must name real Make targets. Put a target name in backticks when it appears in a source comment, docstring, or string. The checker then tells it apart from ordinary prose.
 
-Markdown checks inspect inline code and fenced command blocks. Workflow checks inspect `run:` values. Source checks inspect backticked spans. Tests are excluded because their fixtures intentionally mention targets that do not exist.
+Markdown checks inspect inline code and fenced command blocks. Workflow checks inspect `run:` values. Source checks inspect backticked spans. Test files are excluded because their fixtures name missing targets on purpose. The checks are listed in [testing](testing.md#run-documentation-and-repository-checks).
 
 ## Format without losing review control
 
@@ -280,72 +267,12 @@ Document local development workflow
 EOF
 ```
 
-Committing, pushing, and opening or merging a pull request are maintainer decisions. The available targets are documented by `make help-git` and `make help-pr`.
+Committing, pushing, and opening or merging a pull request are maintainer decisions. Run `make help-git` for the Git targets.
 
-## Use GitHub helpers
+## Work with GitHub and CI
 
-Use the Make wrappers for pull requests, issues, and Actions. Run `make help-pr`, `make help-issue`, or `make help-actions` for every target and argument.
-
-Free-text bodies come from standard input. Titles come from the `TITLE` environment variable. Do not pass a body as a Make argument.
-
-```bash
-make pr-comment < notes.md
-TITLE='Fix the export error' make issue-create < issue.md
-make ci-failures
-make ci-watch
-```
-
-A review thread can be listed, answered, and resolved with:
-
-```bash
-make pr-review-comments
-make pr-address thread=PRRT_... < response.md
-```
-
-The `make pr-*` and `make issue-*` targets try GraphQL first. If the environment refuses GraphQL, as Claude Code cloud sessions do, the targets switch to the REST API for the rest of the run. [ADR-012](adr/012-graphql-first-rest-fallback.md) explains the design. In REST mode, these differences apply:
-
-- Review threads have no node id. `make pr-review-comments` prints each thread as `thread=<id>`, where the id is the number of the thread's first comment. Pass that number to `make pr-reply`, `make pr-resolve`, or `make pr-address`, and add `pr_num=N` when the PR is not on the current branch.
-- `make pr-comments-list` prints numeric comment ids. Pass one to `make pr-comment-delete comment_id=<id>`.
-- A `PRRT_` or `PRRC_` node id needs GraphQL. The target fails and names the numeric id to use instead.
-- List, view, and checks output is tab-separated and close to the `gh` output, not identical.
-- `make pr-create` does not push. Run `make push` first, or the target stops because the branch on GitHub is missing or behind your local `HEAD`.
-- `make pr-merge` and `make pr-close` delete the remote branch but leave your local checkout alone.
-- `make pr-merge` refuses a PR that GitHub does not report as mergeable, because the REST merge has no admin switch and would otherwise bypass branch protection for an administrator. Use `make pr-merge-admin` to merge past protection on purpose.
-- `make issue-develop` creates and checks out the branch but cannot link it to the issue.
-- The targets choose the repository from `GH_REPO` first, then from the default that `gh repo set-default` stored, then from `origin`. If gh stored a default these targets cannot read, they stop instead of using `origin`.
-- With the selected repository different from `origin`, such as upstream from a fork, the targets read and write the selected repository but push and fetch branches through `origin`. `make pr-create` opens the PR from the fork branch. `make pr-checkout` and `make issue-develop` refuse, because their fetches would come from the wrong repository. They also refuse when `origin` is not a GitHub repository.
-- `make issue-list` with `SEARCH` needs the `search/issues` endpoint, which cloud sessions block. The other filters work.
-
-Run `make pr-watch` to observe the current Copilot review and wait for CI checks to finish. The watcher does not request another review by default.
-
-After pushing a correction, run `make pr-watch request=1` to request and wait for a fresh review. To watch CI checks alone, run `make pr-watch checks_only=1`. Use `make pr-copilot-review` to request a review without waiting for it.
-
-The watcher reads both Copilot review formats. A verdict other than "Approval recommended" blocks completion, even when no review threads are open. Run `make pr-comments` to read findings in the review overview.
-
-`make ci-jobs`, `make ci-failures`, `make ci-watch`, and `make ci-rerun` act on the current branch's latest run unless `run=ID` is given. `make ci-watch` exits non-zero when the run fails.
-
-The Make wrappers keep paths and prose out of shell source text. That is why the input convention is part of the repository interface.
-
-## Understand CI path gating
-
-GitHub Actions classifies changed paths into Python, Web, Both, or Neither. Quick gates always run. Heavy checks, compatibility matrices, and browser checks run when their area changed. An unrecognized path fails open to Both, so a new top-level area receives the full matrix until the rules document it.
-
-### Which jobs run for a change
-
-The classifier in `scripts/ci/job_gating.py` contributes every matching rule instead of stopping at the first match. This makes `.github/SECURITY.md` Both because it matches both the `.github/` and `*.md` rules.
-
-| Paths                                                                                                                                                                                         | Area    |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `src/`, `tests/package/`, `tests/integration/`, `tests/support/`, `tests/__init__.py`, `pyproject.toml`, `uv.lock`                                                                            | Python  |
-| `web/`, `api/`, `config/`, `package.json`, `package-lock.json`, `vercel.json`                                                                                                                 | Web     |
-| `Makefile`, `.github/`, `scripts/`, `tests/tooling/`, `tests/fixtures/`, `constraints/`, `Dockerfile`, `.dockerignore`, `.editorconfig`, `.npmrc`, `.pre-commit-config.yaml`, `.yamllint.yml` | Both    |
-| `.agents/skills/`, `docs/`, any `*.md`, `data/`, `LICENSE`, `.gitignore`, `.env.example`                                                                                                      | Neither |
-| anything else                                                                                                                                                                                 | Both    |
-
-`tests/fixtures/` is Both because the browser parity suite reads the shared corpus directly. Renames are compared with `--no-renames`, so both the deleted and added paths contribute to the area decision. The required `CI result` job checks that every job expected for the detected areas ran and succeeded.
-
-Read [operations](operations.md#understand-ci) for workflow order, scheduled automation, alert issues, and CI recovery.
+Use [GitHub helpers](github-helpers.md) for the pull request, issue, and Actions targets. CI workflows, scheduled automation, and credentials are in [CI and repository automation](ci.md).
 
 ## Keep documentation current
 
-Update documentation when a command, flag, route, output file, limit, workflow, or privacy rule changes. Use the real path and symbol name in the text. Run `make lint-doc-commands` and `make lint-make-targets` after documentation changes.
+Update the page that owns a fact instead of repeating it elsewhere. Follow the [documentation rules](style-guide.md#update-documentation) when you change a page, then run the [documentation checks](testing.md#run-documentation-and-repository-checks).

@@ -121,8 +121,8 @@ export default [
         },
     },
     {
-        // TypeScript sources carry their types in the code, so JSDoc keeps the
-        // descriptions only, and the compiler, not no-undef, checks names.
+        // TypeScript files: types come from the code and the compiler checks names,
+        // so the JSDoc type rules and no-undef are off.
         files: ["web/src/**/*.ts"],
         languageOptions: {
             parser: tsParser,

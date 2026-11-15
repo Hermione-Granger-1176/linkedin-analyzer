@@ -44,8 +44,7 @@ dev = [
 ]
 
 [tool.uv]
-# Require a minimum uv version so newer installations can use the checkout.
-# Raise this requirement only when a repository feature needs a newer version.
+# Minimum uv version. Raise it only when a repository feature needs a newer one.
 required-version = ">=0.11.0"
 
 [project.scripts]
@@ -126,10 +125,8 @@ addopts = [
     "-ra",
     "--cov",
     "--cov-report=term-missing",
-    # Machine-readable totals for `make ci-coverage-summary`. Written on every
-    # run so the summary can never report a stale number from an earlier one.
-    # It lives outside coverage/ because Vitest wipes that directory before its
-    # own run, and ci-heavy-checks runs both suites in parallel.
+    # Machine-readable totals for `make ci-coverage-summary`, written on every run.
+    # Stored outside coverage/, which Vitest clears before its own run.
     "--cov-report=json:.artifacts/coverage/python-coverage.json",
     "--cov-fail-under=100",
 ]

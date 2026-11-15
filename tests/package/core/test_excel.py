@@ -54,7 +54,7 @@ def test_format_excel_worksheet_raises_without_active_sheet(tmp_path: Path) -> N
 
 
 def test_format_excel_output_saves_formatted_workbook(tmp_path: Path) -> None:
-    """Keep the path-based formatting API working for existing callers."""
+    """Checks that format_excel_output formats and saves a workbook at the given path."""
     output_path = tmp_path / "output.xlsx"
     workbook = Workbook()
     workbook.active.append(["Name"])

@@ -228,7 +228,7 @@ export const MessagesPage = (() => {
 
     /**
      * Drop the computed state and show why the page has nothing to analyze.
-     * @param {string} signature - Dataset signature to remember, so the same data is not reloaded
+     * @param {string} signature - Dataset signature recorded as loaded
      * @param {string} title - Empty state title
      * @param {string} message - Empty state explanation
      */
@@ -315,16 +315,14 @@ export const MessagesPage = (() => {
         ]);
         const messagesBlob = messagesStored ? messagesStored.blob : null;
         if (!messagesBlob) {
-            // The metadata says messages.csv exists but its contents are
-            // gone (cleared in another tab or degraded persistence). Treat
-            // the missing payload as a load failure so the UI enters the
-            // storage-error path instead of a misleading "parsing error".
+            // Metadata exists but the Blob is gone, for example after a clear in
+            // another tab or degraded persistence. Throws so the UI shows the
+            // storage-error state.
             throw new Error("Stored messages file record is missing.");
         }
         const connectionsBlob = connectionsStored ? connectionsStored.blob : null;
-        // Connections is optional, but if its metadata is present while the
-        // file record is missing, flag it as a load error rather than
-        // silently dropping the connections insights.
+        // Connections is optional. If its metadata exists without a file record,
+        // it is flagged as a load error.
         const connectionsFileMissing = hasConnectionsFile && !connectionsBlob;
         return { messagesBlob, connectionsBlob, connectionsFileMissing };
     }
@@ -368,8 +366,8 @@ export const MessagesPage = (() => {
             );
             return;
         }
-        // Persist only once the dataset is confirmed usable, so an empty
-        // parse can't overwrite a previously valid stored outreach summary.
+        // Persists only after the dataset is confirmed usable. An empty parse does
+        // not overwrite a valid stored outreach summary.
         persistOutreach(state.messageState.outreach);
 
         if (processed.connectionState) {
@@ -567,9 +565,9 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Best-effort persist of the lifetime outreach summary so the Insights page
-     * can show it without loading the message export. Runs once per dataset load
-     * (not per filter re-render) and never blocks the UI on a storage failure.
+     * Best-effort persist of the lifetime outreach summary, which the Insights
+     * page reads. Runs once per dataset load, not per filter re-render, and does
+     * not block the UI on a storage failure.
      * @param {OutreachSummary|null} outreach - Outreach summary from the message state
      */
     function persistOutreach(outreach) {
@@ -792,8 +790,7 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Build a contextual tip string. Pip speaks the tip on screen, so every
-     * branch stays in his first-person voice.
+     * Build a contextual tip string, written in Pip's first-person voice.
      * @param {RangeContact[]} topContacts - Top contacts list
      * @param {Connection[]} silentConnections - Silent connections list
      * @param {FadingConversation[]} fadingConversations - Fading conversations list
@@ -809,8 +806,7 @@ export const MessagesPage = (() => {
         const fading = fadingConversations[0] || null;
 
         if (top && fading) {
-            // A conversation is only fading after thirty quiet days, so the day
-            // count here is never one.
+            // Fading conversations have been quiet for at least 30 days.
             return `${top.name} is your liveliest thread. I would say hello to ${fading.name} too, quiet for ${fading.daysSince} days now.`;
         }
 
@@ -835,7 +831,7 @@ export const MessagesPage = (() => {
         const missingFileMessages = {
             silent: "Upload Connections.csv to view silent connections.",
             fading: "Upload Connections.csv to identify fading conversations.",
-            // Pip reads the tip out, so this one is in his voice.
+            // Written in Pip's voice.
             tip: "Upload Connections.csv and I can point out who has gone quiet on you.",
         };
 

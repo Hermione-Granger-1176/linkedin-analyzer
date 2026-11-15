@@ -3,8 +3,7 @@ const { expect, test } = require("@playwright/test");
 // Keyframe keys that describe timing rather than an animated property.
 const KEYFRAME_META = new Set(["offset", "computedOffset", "easing", "composite"]);
 
-// The suite runs with reduced motion, which always wins over the tier. These
-// tests compare the tiers' own animations, so they allow motion.
+// Reduced motion overrides the effects tier, so these tests allow motion.
 test.use({ reducedMotion: "no-preference" });
 
 test.beforeEach(async ({ page }) => {
@@ -22,8 +21,7 @@ test.beforeEach(async ({ page }) => {
  */
 async function openAndReadTier(page) {
     await page.goto("/#home");
-    // The tier is applied before the router starts, so an active screen means
-    // the shipped `lite` default has already been replaced.
+    // The tier is set before the router starts. An active screen means the default `lite` tier has been replaced.
     await expect(page.locator(".screen.active")).toHaveCount(1);
     return page.evaluate(() => document.documentElement.dataset.effects);
 }
@@ -94,7 +92,7 @@ test("without a GPU, gets no higher than the standard tier", async ({
     playwright,
 }) => {
     test.skip(browserName !== "chromium", "--disable-gpu is a Chromium switch");
-    // A browser of its own, because the switch applies at launch.
+    // Launches a separate browser, since the switch applies only at launch.
     const browser = await playwright.chromium.launch({ args: ["--disable-gpu"] });
     try {
         const page = await browser.newPage({ baseURL });
@@ -137,8 +135,8 @@ test("Save-Data gets the lite tier, creates no WebGL context, and animates only 
 
 test("above lite, probes WebGL once and runs the heavier moves", async ({ page }) => {
     await countWebglRequests(page);
-    // Auto probes only when the device could reach rich, so do not depend on
-    // the runner's cores or memory.
+    // The auto tier probes WebGL only when the device could reach rich. Cores and memory
+    // are overridden so the result does not depend on the runner.
     await page.addInitScript(() => {
         Object.defineProperty(Navigator.prototype, "hardwareConcurrency", {
             configurable: true,
@@ -151,8 +149,7 @@ test("above lite, probes WebGL once and runs the heavier moves", async ({ page }
     });
     const tier = await openAndReadTier(page);
     test.skip(tier === "lite", "this runner's own signals already pick lite");
-    // Above lite, the home screen runs repaint-heavy moves too, which is what
-    // makes the lite check above meaningful.
+    // Above lite, the home screen also runs repaint-heavy animations.
     await expect
         .poll(async () =>
             (await readAnimatedProperties(page)).some((name) => !isCompositorOnly(name)),

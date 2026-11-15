@@ -16,8 +16,7 @@ import {
 } from "../../src/app/worker-contracts.ts";
 import { MAX_CSV_CHARS } from "../../src/shared/limits.js";
 
-// A small character limit keeps the size-limit assertions from allocating a
-// string as large as the real one.
+// Lowers the character limits so the size-limit assertions use small strings.
 vi.mock("../../src/shared/limits.js", async (importOriginal) => ({
     ...(await importOriginal()),
     MAX_CSV_CHARS: 1024,
@@ -588,8 +587,8 @@ describe("worker contracts", () => {
             payload: { messagesCsv: "FROM,TO\na,b", connectionsCsv },
         });
 
-        // Verbatim: the worker derives the tiebreak keys from it, and a rewritten
-        // cell is a key that matches nobody.
+        // Passed through verbatim. The worker derives tiebreak keys from it, and a
+        // rewritten cell would match no key.
         expect(parsed.value.payload.connectionsCsv).toBe(connectionsCsv);
     });
 
@@ -603,8 +602,7 @@ describe("worker contracts", () => {
             payload: { messagesCsv: "FROM,TO\na,b", connectionsCsv: ["Ada"] },
         });
 
-        // A missing connections file leaves the tie unresolved rather than
-        // failing the request: the messages file is what the section is made of.
+        // A missing connections file leaves ties unresolved and does not fail the request.
         expect(absent.valid).toBe(true);
         expect(absent.value.payload.connectionsCsv).toBe("");
         expect(invalidShape.valid).toBe(true);
@@ -612,9 +610,8 @@ describe("worker contracts", () => {
     });
 
     it("rejects an oversized connections file rather than truncating it", () => {
-        // Truncation would leave the worker naming half the user's connections
-        // and calling the other half strangers, which makes the tiebreak wrong
-        // rather than absent.
+        // Oversized files are rejected, not truncated. A truncated file would make
+        // the worker treat part of the user's connections as strangers.
         const parsed = parseThreadsWorkerRequest({
             type: "threads",
             requestId: 5,
@@ -639,8 +636,7 @@ describe("worker contracts", () => {
     });
 
     it("keeps the request id on a rejected threads worker request", () => {
-        // The worker answers a rejection under this id; without it the main
-        // thread ignores the reply and waits out its whole watchdog.
+        // The worker answers a rejection under this id, so the main thread can match the reply.
         expect(parseThreadsWorkerRequest({ type: "threads", requestId: 8 }).requestId).toBe(8);
         expect(
             parseThreadsWorkerRequest({ type: "threads", requestId: "job-1", payload: {} })

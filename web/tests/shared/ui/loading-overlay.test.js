@@ -6,7 +6,7 @@ let LoadingOverlay;
 
 describe("LoadingOverlay", () => {
     beforeEach(async () => {
-        // Reset the module so overlayElements cache is cleared each test
+        // Reset the module so the overlayElements cache starts empty for each test
         vi.resetModules();
         ({ LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js"));
 

@@ -32,8 +32,8 @@ describe("collectContactKeys", () => {
     });
 
     it("keeps a connection whose export recorded no connection date", () => {
-        // The connections cleaner drops rows without Connected On. Contact-key
-        // matching must still include those rows.
+        // The cleaner drops rows without Connected On. Contact-key matching
+        // still includes those rows.
         const csv = connectionsCsv([`Ada,Lovelace,${ADA_URL},,Analytical Engines,Mathematician,`]);
 
         expect(LinkedInCleaner.process(csv, "connections").cleanedData).toHaveLength(0);
@@ -41,7 +41,7 @@ describe("collectContactKeys", () => {
     });
 
     it("keeps a row the cleaner would rewrite for a spreadsheet", () => {
-        // Match the raw name before the cleaner prefixes an apostrophe for spreadsheet export.
+        // Keys use the raw name, before the cleaner prefixes an apostrophe for spreadsheet export.
         const csv = connectionsCsv([`=Ada,Lovelace,${ADA_URL},,Acme,Engineer,01 Jan 2024`]);
 
         expect(collectContactKeys(csv)).toContain("=ada lovelace");

@@ -1,8 +1,7 @@
 name: Alert Issue
 
-# Shared by every scheduled workflow that reports its health through one
-# tracking issue. Callers supply the issue identity and the state to sync;
-# all issue handling lives in scripts/ci/issue_alerts.py.
+# Reusable workflow that syncs one tracking issue for a scheduled workflow.
+# Callers pass the title, label, and state. Issue logic: scripts/ci/issue_alerts.py.
 
 on:
   workflow_call:
@@ -46,9 +45,7 @@ jobs:
         with:
           node-version: ""
 
-      # Inputs reach make through the environment and stdin, never through
-      # template interpolation inside the script body. The detail is the alert's
-      # body, so it is piped in; nothing has to quote it for a make command line.
+      # Inputs are read from environment variables. The detail is piped to make as the issue body.
       - name: Sync the alert issue
         env:
           GH_TOKEN: ${{ github.token }}

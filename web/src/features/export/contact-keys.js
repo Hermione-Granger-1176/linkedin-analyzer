@@ -8,8 +8,8 @@
  * The owner is absent from the connections list, which can resolve that tie.
  * A missing or unreadable connections file leaves it unresolved.
  *
- * Use parsed rows because the cleaner drops rows without connection dates.
- * Those rows can still identify participants who are not the account owner.
+ * Keys come from parsed rows before cleaning, so rows the cleaner drops for
+ * lacking connection dates still contribute keys.
  */
 
 import { toCsvSource } from "../../shared/csv-source.js";

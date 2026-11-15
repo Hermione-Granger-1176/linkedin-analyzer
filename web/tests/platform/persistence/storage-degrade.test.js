@@ -52,8 +52,8 @@ describe("Storage runtime degrade to memory on open failure", () => {
         const listener = vi.fn();
         Storage.onPersistenceLost(listener);
 
-        // Fire concurrently so both ops share the single memoized open() and both
-        // reach degradeToMemory; the idempotent guard must still notify only once.
+        // Runs both operations concurrently so they share one memoized open().
+        // The listener is still called once.
         await Promise.all([
             Storage.saveFile("shares", { name: "s.csv", text: "a,b" }),
             Storage.getAllFiles(),

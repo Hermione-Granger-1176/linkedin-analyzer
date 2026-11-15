@@ -1,10 +1,9 @@
 /**
  * Vitest unit tests for the sketch-style upload progress overlay controller.
  *
- * UploadProgress was extracted from upload.js. It owns its own DOM refs and an
- * animation loop, so the module is re-imported per test after the overlay DOM
- * and a mocked canvas are in place, and requestAnimationFrame is stubbed so the
- * loop can be driven deterministically.
+ * UploadProgress owns its own DOM refs and an animation loop. Each test
+ * re-imports the module after the overlay DOM and a mocked canvas are in place,
+ * and requestAnimationFrame is stubbed so the loop runs deterministically.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -84,7 +83,7 @@ describe("UploadProgress", () => {
 
         flushFrame(performance.now() + 5000);
         await flushMicrotasks();
-        // The crawl continues while jobs are active, so a frame stays queued.
+        // While jobs are active, the crawl keeps a frame queued.
         expect(rafCallbacks.length).toBeGreaterThan(0);
         expect(document.getElementById("progressPercent").textContent).toMatch(/%$/);
     });

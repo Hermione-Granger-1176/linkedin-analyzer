@@ -41,7 +41,7 @@ describe("Session", () => {
         window.localStorage.removeItem("linkedin-analyzer:last-activity");
         vi.spyOn(Storage, "clearAll").mockResolvedValue();
         const cleaned = await Session.cleanIfStale();
-        // No lastActivity means it won't clean (returns false and touches)
+        // Without a stored timestamp nothing is cleaned. The call returns false and touches.
         expect(cleaned).toBe(false);
     });
 
@@ -116,7 +116,7 @@ describe("Session", () => {
             String(Date.now() - 2 * 24 * 60 * 60 * 1000)
         );
         await Session.cleanIfStale();
-        // The notice fires once, then resets so it is not shown on every visit.
+        // The notice is returned once, then cleared.
         expect(Session.consumeExpiryNotice()).toBe(true);
         expect(Session.consumeExpiryNotice()).toBe(false);
     });

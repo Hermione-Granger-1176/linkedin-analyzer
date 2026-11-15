@@ -44,31 +44,31 @@ def _js_report(tmp_path: Path, total: object = None) -> Path:
     return _write(tmp_path / "summary.json", {"total": JS_TOTAL if total is None else total})
 
 
-# ─── Percentages ─────────────────────────────────────────────────────────────
+# Percentages
 
 
 def test_the_percentage_is_derived_from_the_counts_beside_it() -> None:
-    """One source for the row, so the percentage cannot contradict the counts."""
+    """The percentage is computed from the covered and total counts of the same row."""
     metric = coverage_summary.CoverageMetric("Python", "branches", 1280, 1288)
     assert metric.percent == pytest.approx(99.3788, abs=1e-4)
 
 
 def test_nothing_to_cover_counts_as_fully_covered() -> None:
-    """A suite with no branches at all must not divide by zero on the way to a report."""
+    """A metric with a total of zero reports 100 percent without dividing by zero."""
     assert coverage_summary.CoverageMetric("JavaScript", "branches", 0, 0).percent == 100.0
 
 
 def test_a_covered_count_above_the_total_is_an_error() -> None:
-    """An impossible count must not render as over 100 percent or positive-of-zero."""
+    """A covered count greater than the total raises ValueError."""
     with pytest.raises(ValueError, match="101 covered but only 100 total"):
         coverage_summary.CoverageMetric("Python", "statements", 101, 100)
 
 
-# ─── Reading the two report formats ──────────────────────────────────────────
+# Reading the two report formats
 
 
 def test_python_totals_are_read_from_the_pytest_cov_keys(tmp_path: Path) -> None:
-    """pytest-cov names the same two counts differently from every other tool."""
+    """Reads the statement and branch counts from pytest-cov's key names."""
     metrics = coverage_summary.read_python_metrics(_python_report(tmp_path))
     assert [(m.metric, m.covered, m.total) for m in metrics] == [
         ("statements", 4152, 4152),
@@ -77,7 +77,7 @@ def test_python_totals_are_read_from_the_pytest_cov_keys(tmp_path: Path) -> None
 
 
 def test_js_totals_are_read_for_every_reported_metric(tmp_path: Path) -> None:
-    """Include every configured coverage source in the summary."""
+    """Every metric in JS_METRICS is read from the Vitest summary."""
     metrics = coverage_summary.read_js_metrics(_js_report(tmp_path))
     assert [m.metric for m in metrics] == list(coverage_summary.JS_METRICS)
     assert [(m.covered, m.total) for m in metrics] == [
@@ -89,17 +89,17 @@ def test_js_totals_are_read_for_every_reported_metric(tmp_path: Path) -> None:
 
 
 def test_the_implicit_else_branch_metric_is_left_out(tmp_path: Path) -> None:
-    """Vitest reports `branchesTrue` as 100% of zero, which would read as real coverage."""
+    """The Vitest `branchesTrue` metric is not read, since it is always 0 of 0."""
     report = _js_report(tmp_path, {**JS_TOTAL, "branchesTrue": {"covered": 0, "total": 0}})
     metrics = coverage_summary.read_js_metrics(report)
     assert [m.metric for m in metrics] == list(coverage_summary.JS_METRICS)
 
 
-# ─── Reports that cannot be trusted ──────────────────────────────────────────
+# Reports that cannot be trusted
 
 
 def test_a_report_that_is_not_json_is_an_error(tmp_path: Path) -> None:
-    """A present but unreadable report means something broke, not that a suite was skipped."""
+    """A report that is not valid JSON raises ValueError."""
     path = tmp_path / "coverage.json"
     path.write_text("not json", encoding="utf-8")
     with pytest.raises(ValueError, match="is not valid JSON"):
@@ -107,7 +107,7 @@ def test_a_report_that_is_not_json_is_an_error(tmp_path: Path) -> None:
 
 
 def test_a_report_that_is_not_an_object_is_an_error(tmp_path: Path) -> None:
-    """A present but unreadable report means something broke, not that a suite was skipped."""
+    """A report whose top-level value is not a JSON object raises ValueError."""
     path = _write(tmp_path / "coverage.json", [])
     with pytest.raises(ValueError, match="must be a JSON object"):
         coverage_summary.read_python_metrics(path)
@@ -115,14 +115,14 @@ def test_a_report_that_is_not_an_object_is_an_error(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("payload", [{}, {"totals": []}], ids=["absent", "wrong-shape"])
 def test_a_report_without_its_totals_object_is_an_error(tmp_path: Path, payload: object) -> None:
-    """Reporting no rows would read as a suite that did not run."""
+    """A report without a 'totals' object raises ValueError."""
     path = _write(tmp_path / "coverage.json", payload)
     with pytest.raises(ValueError, match="missing a 'totals' object"):
         coverage_summary.read_python_metrics(path)
 
 
 def test_a_js_report_missing_one_metric_is_an_error(tmp_path: Path) -> None:
-    """A silently dropped row looks the same as a metric that was never collected."""
+    """A JS report that lacks one metric raises ValueError."""
     total = {key: value for key, value in JS_TOTAL.items() if key != "functions"}
     with pytest.raises(ValueError, match="missing a 'functions' total"):
         coverage_summary.read_js_metrics(_js_report(tmp_path, total))
@@ -134,17 +134,17 @@ def test_a_js_report_missing_one_metric_is_an_error(tmp_path: Path) -> None:
     ids=["absent", "string", "negative", "boolean"],
 )
 def test_a_count_that_is_not_a_whole_number_is_an_error(tmp_path: Path, covered: object) -> None:
-    """`True` is an int in Python, so an unguarded read would report it as 1 covered line."""
+    """Rejects booleans, which Python treats as ints, along with other non-counts."""
     report = _python_report(tmp_path, {**PYTHON_TOTALS, "covered_lines": covered})
     with pytest.raises(ValueError, match="non-negative integer 'covered_lines'"):
         coverage_summary.read_python_metrics(report)
 
 
-# ─── Rendering ───────────────────────────────────────────────────────────────
+# Rendering
 
 
 def test_both_suites_render_as_one_table(tmp_path: Path) -> None:
-    """The exact rows are the deliverable, so they are pinned rather than pattern-matched."""
+    """Pins the exact rendered rows of both suites."""
     summary = coverage_summary.build_summary(
         python_report=_python_report(tmp_path),
         js_report=_js_report(tmp_path),
@@ -164,7 +164,7 @@ def test_both_suites_render_as_one_table(tmp_path: Path) -> None:
 
 
 def test_a_missing_report_becomes_a_note_beside_the_suite_that_did_run(tmp_path: Path) -> None:
-    """The summary step runs even when a suite failed before writing its report."""
+    """A missing report renders a note beside the suite that did run."""
     summary = coverage_summary.build_summary(
         python_report=tmp_path / "absent.json",
         js_report=_js_report(tmp_path),
@@ -175,7 +175,7 @@ def test_a_missing_report_becomes_a_note_beside_the_suite_that_did_run(tmp_path:
 
 
 def test_two_missing_reports_leave_a_heading_and_two_notes(tmp_path: Path) -> None:
-    """An empty table would be worse than saying plainly that nothing ran."""
+    """Two missing reports render a heading and one note per suite, with no table."""
     summary = coverage_summary.build_summary(
         python_report=tmp_path / "absent.json",
         js_report=tmp_path / "also-absent.json",
@@ -184,7 +184,7 @@ def test_two_missing_reports_leave_a_heading_and_two_notes(tmp_path: Path) -> No
     assert summary.count("> No ") == 2
 
 
-# ─── The command line ────────────────────────────────────────────────────────
+# The command line
 
 
 def test_the_summary_is_printed_for_the_job_summary(
@@ -204,7 +204,7 @@ def test_the_summary_is_printed_for_the_job_summary(
 
 
 def test_the_default_report_paths_match_where_the_test_tools_write_them() -> None:
-    """A default that drifts from the tools' own configuration turns this into two notes."""
+    """The default report paths match the paths the coverage tools write."""
     pyproject = (Path(__file__).parents[3] / "pyproject.toml").read_text(encoding="utf-8")
     vitest = (Path(__file__).parents[3] / "web" / "vitest.config.mjs").read_text(encoding="utf-8")
     assert f"--cov-report=json:{coverage_summary.DEFAULT_PYTHON_REPORT}" in pyproject
@@ -213,6 +213,6 @@ def test_the_default_report_paths_match_where_the_test_tools_write_them() -> Non
 
 
 def test_the_python_report_is_written_outside_the_directory_vitest_wipes() -> None:
-    """Both suites run in parallel, and Vitest cleans coverage/ before its own run."""
+    """The Python report is outside coverage/, which Vitest clears before it runs."""
     assert coverage_summary.DEFAULT_JS_REPORT.parts[0] == "coverage"
     assert coverage_summary.DEFAULT_PYTHON_REPORT.parts[0] != "coverage"

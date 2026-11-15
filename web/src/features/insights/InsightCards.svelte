@@ -52,11 +52,10 @@
 {:else if mode === "cards"}
     {#each cards as insight}
         {@const accent = resolveAccentClass(insight.accent)}
-        <!-- Pip reacts to what the card says from its bottom-right corner. He is
-        decoration on top of the card, not part of it: the PDF export is built
-        from these same insight objects rather than from the DOM, so nothing
-        about him reaches the document. The icon and reaction markup are fixed
-        drawings from this repository, never worker text. -->
+        <!-- Pip reacts to the card text from its bottom-right corner. He is
+        decoration on top of the card and is not part of the PDF export, which
+        reads these insight objects rather than the DOM. The icon and reaction
+        markup are fixed drawings from this repository, never worker text. -->
         <div class="insight-card" data-accent={accent}>
             <div class="insight-icon {accent}">{@html insightIcon(insight.icon)}</div>
             <div class="insight-body">

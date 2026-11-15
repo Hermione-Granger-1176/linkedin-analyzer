@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import TextIO
 
 # A runner takes the command vector and returns its exit code.
-# Injectable so tests never start a real process.
+# Tests pass a fake runner.
 CommandRunner = Callable[[Sequence[str]], int]
 
 USAGE = (

@@ -78,9 +78,7 @@ describe("connections view helpers", () => {
     });
 
     it("filterRowsByRange cuts each range at the number of days it names", () => {
-        // Probed on both sides of every cutoff. Unpinned, "6m" could be changed
-        // from 182 days to 100 and every test in this file would still pass,
-        // while the Connections screen quietly showed a third less history.
+        // Checks both sides of each cutoff, so changing the length of any range fails here.
         const days = { "1m": 30, "3m": 91, "6m": 182, "12m": 365 };
 
         for (const [range, span] of Object.entries(days)) {
@@ -101,9 +99,7 @@ describe("connections view helpers", () => {
     });
 
     it("findTopValue keeps whichever value reached the top count first", () => {
-        // The comparison is strictly greater, so a later value never displaces
-        // one already on the same count. Relaxing it to >= would silently change
-        // whose name the "Top company" tile carries for anyone with a tie.
+        // The comparison is strictly greater, so on a tie the value seen first stays on top.
         const rows = [
             { company: "Globex" },
             { company: "Globex" },

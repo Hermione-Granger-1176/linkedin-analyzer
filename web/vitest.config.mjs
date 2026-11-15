@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
     plugins: [svelte()],
-    // Components mount in jsdom, so tests need the browser build of Svelte.
+    // Components mount in jsdom and use the browser build of Svelte.
     resolve: { conditions: ["browser"] },
     test: {
         environment: "jsdom",
@@ -11,8 +11,8 @@ export default defineConfig({
         coverage: {
             provider: "v8",
             reportsDirectory: "./coverage",
-            // json-summary feeds `make ci-coverage-summary`; html stays for
-            // reading a local run, text keeps the terminal output unchanged.
+            // json-summary feeds `make ci-coverage-summary`. html is written for
+            // local runs; text prints to the terminal.
             reporter: ["text", "html", "json-summary"],
             all: true,
             include: ["web/src/**/*.{js,ts,svelte}", "api/**/*.mjs"],

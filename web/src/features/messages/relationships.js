@@ -144,8 +144,8 @@ export function getSilentConnections(messageState, connectionState) {
 export function getFadingConversations(messageState, connectionState) {
     const now = Date.now();
     // Several message contacts can match one connection (the same name seen
-    // with and without a profile URL), so each connection is judged by its
-    // most recent conversation and listed once.
+    // with and without a profile URL). Each connection is judged by its most
+    // recent conversation and listed once.
     /** @type {Map<Connection, MessageContact>} */
     const latestByConnection = new Map();
     for (const contact of messageState.contacts.values()) {
@@ -198,7 +198,8 @@ function findMatchingConnection(contact, connectionState) {
     }
     const nameKey = MessagesAnalytics.normalizeName(contact.name);
     const byName = nameKey ? connectionState.byName.get(nameKey) : undefined;
-    // Two different profile URLs are two people who share a name.
+    // A name match counts only when one side has no profile URL. Two different
+    // profile URLs are different people with the same name.
     if (byName && (!contact.url || !byName.url)) {
         return byName;
     }

@@ -10,15 +10,13 @@ export const NavMenu = (() => {
 
     /** @type {Array<{toggle: HTMLElement, nav: HTMLElement}>} */
     const pairs = [];
-    /** Toggles whose per-element listeners are already attached; re-init must
-     * refresh pairs without stacking duplicate handlers on the same elements. */
+    /** Toggles that already have per-element listeners. Re-init refreshes pairs without adding duplicate handlers. */
     const wiredToggles = new WeakSet();
     let documentListenersBound = false;
 
     /** Wire every nav toggle button to the nav it controls. */
     function init() {
-        // Clear in place so re-init drops stale pairs while the shared document
-        // listeners keep their reference to this same array.
+        // Clears in place. The document listeners hold a reference to this array.
         pairs.length = 0;
         const toggles = document.querySelectorAll(".nav-toggle");
         toggles.forEach((toggle) => wireToggle(/** @type {HTMLElement} */ (toggle)));
@@ -56,9 +54,8 @@ export const NavMenu = (() => {
     }
 
     /**
-     * Register the shared document-level handlers once. A single keydown and a
-     * single click listener drive every wired pair, so app-wide events fan out
-     * once rather than through one closure per toggle.
+     * Register the shared document-level handlers once. One keydown and one click
+     * listener handle every wired pair.
      */
     function bindDocumentListeners() {
         if (documentListenersBound) {

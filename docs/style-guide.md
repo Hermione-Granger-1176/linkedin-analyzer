@@ -24,11 +24,11 @@ Keep code, tests, docs, and repository automation consistent with the names alre
 - Keep Markdown paragraphs on one line. Use `make align-tables-check` for Markdown tables.
 - Follow `.editorconfig` for line endings, final newlines, character encoding, and trailing whitespace.
 
-## Write comments that explain a reason
+## Write comments that describe the current code
 
-Let the code explain what it does. Add a comment when the reason would otherwise be hard to infer from the code or from a test. Do not restate the next line.
+Comments and docstrings describe what the current code does: behavior, inputs, outputs, invariants, and edge cases. They do not record history, such as what the code used to do, past bugs, or PR numbers. They also do not justify design choices. Put history and rationale in commit messages and in [ADRs](adr/README.md).
 
-Keep comments short, direct, and near the code they explain. Name the real constraint, such as a browser API limitation, a privacy rule, or a compatibility requirement.
+Keep comments short and close to the code they describe. Name a constraint the code must respect, such as a browser API limit or a privacy rule. Do not restate the next line.
 
 Mascot SVG and CSS comments can describe the pose because path coordinates do not show what the drawing represents.
 
@@ -52,13 +52,15 @@ In browser code, keep worker failures, timeouts, and storage failures distinct w
 
 Add a focused test for new behavior and an edge case for each new branch. Keep tests deterministic and independent of the local timezone, current time, network, and private exports.
 
-Maintain 100 percent statement and branch coverage over `src/linkedin_analyzer/` and `scripts/`. Maintain the JavaScript thresholds in `web/vitest.config.mjs`.
+Keep coverage at the thresholds that [testing](testing.md) defines.
 
-Update parity fixtures when a cleaner rule changes intentionally. Run `make gen-parity-corpus` only when the expected behavior changed, and review the generated diff.
+Update the parity fixtures when a cleaner rule changes on purpose. The regeneration steps are in [parity checks](testing.md#check-cleaner-parity).
 
 ## Update documentation
 
-Update docs when a command, option, route, output file, limit, workflow, or privacy rule changes. Put user actions in the user guide, lookup facts in a reference page, design reasons in an explanation, and multi-step tasks in a how-to page.
+Update docs when a command, option, route, output file, limit, workflow, or privacy rule changes. Pages describe the current system. Put history and design rationale in [ADRs](adr/README.md), and link to them from the pages that need them.
+
+Put user actions in the user guide, lookup facts in a reference page, how the system works in an explanation page, and multi-step tasks in a how-to page.
 
 Use sentence case headings. Use one H1 per page and do not skip heading levels. Use numbered lists for sequences and bullets for non-sequential facts. Put conditions before the step they guard.
 
@@ -66,13 +68,7 @@ Apply the same writing standard to new and existing documentation, comments, and
 
 Write paths, symbols, flags, and Make targets exactly as they appear in the repository. Use code formatting for commands and symbols. Keep one name for each concept across all docs.
 
-Run these checks after a documentation change:
-
-```bash
-make lint-doc-commands
-make lint-make-targets
-make align-tables-check
-```
+Run the [documentation checks](testing.md#run-documentation-and-repository-checks) after a documentation change.
 
 ## Keep the runtimes aligned
 

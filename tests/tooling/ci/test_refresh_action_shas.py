@@ -53,7 +53,7 @@ def test_update_line_ignores_non_uses_and_local() -> None:
 
 
 def test_update_line_rejects_an_invalid_resolver_result() -> None:
-    """A resolver cannot write a non-immutable ref into a workflow."""
+    """Rejects a resolver result that is not a full commit SHA."""
     with pytest.raises(ValueError, match=r"invalid commit SHA.*actions/checkout@v4"):
         ras.update_line("  - uses: actions/checkout@v4", fixed_resolver("not-a-sha"))
 
@@ -235,7 +235,7 @@ def test_github_fetch_reads_the_commit_sha_with_an_authorized_request(
 def test_github_fetch_rejects_an_invalid_commit_sha(
     monkeypatch: pytest.MonkeyPatch, payload: object
 ) -> None:
-    """Never write an API response that is not an immutable full commit SHA."""
+    """Rejects an API response that is not a full commit SHA."""
 
     def fake_urlopen(_request: Request, timeout: float) -> io.BytesIO:
         assert timeout == 15

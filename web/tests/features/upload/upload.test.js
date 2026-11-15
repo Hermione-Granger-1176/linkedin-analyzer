@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_FILE_BYTES } from "../../../src/shared/limits.js";
 import { createCanvas, mockMatchMedia, setupDom } from "../../helpers/dom.js";
 
-// The reader path now reads raw bytes via FileReader.readAsArrayBuffer, so mock
-// results are ArrayBuffers. This encodes a string the same way the browser would.
+// The reader reads raw bytes via FileReader.readAsArrayBuffer, so mock results
+// are ArrayBuffers. This encodes a string the way the browser does.
 const encodeBuf = (str) => new TextEncoder().encode(str).buffer;
 
 vi.mock("roughjs/bundled/rough.esm.js", () => ({
@@ -135,8 +135,7 @@ describe("UploadPage", () => {
         window.cancelAnimationFrame = vi.fn((id) => {
             /* no-op for sync rAF */
         });
-        // Synchronous idle callback, fires immediately and never re-schedules.
-        // This prevents pending setTimeout chains from leaking between tests.
+        // Synchronous idle callback that runs immediately and never re-schedules.
         window.requestIdleCallback = vi.fn((cb) => {
             cb();
             return 0;
@@ -154,8 +153,7 @@ describe("UploadPage", () => {
         globalThis.Worker = MockWorker;
         setupUploadDom({ asyncRaf: false });
 
-        // Reset navigator.storage so low-storage warnings from one test don't
-        // bleed into subsequent tests.
+        // Clears navigator.storage so a low-storage warning does not carry into the next test.
         navigator.storage = undefined;
 
         vi.resetModules();
@@ -166,9 +164,8 @@ describe("UploadPage", () => {
         ({ preloadRouteWhenIdle } = await import("../../../src/app/route-preload.js"));
         preloadRouteWhenIdle.mockReset();
 
-        // Reset all mock call counts and return-value overrides. Since vi.mock()
-        // creates module-level singletons that persist across vi.resetModules(),
-        // call history from previous tests would bleed through without this reset.
+        // Resets mock call counts and return values. vi.mock() singletons survive
+        // vi.resetModules(), so the reset is needed here.
         Storage.getAllFiles.mockReset();
         Storage.getFile.mockReset();
         Storage.getAnalytics.mockReset();
@@ -194,8 +191,8 @@ describe("UploadPage", () => {
     });
 
     afterEach(async () => {
-        // A drop starts Pip's catch, which holds a 1.1s timer to put him away
-        // again. Cleared here so it cannot outlive the test that started it.
+        // A drop starts Pip's catch, which holds a 1.1s timer. hideCatcher() clears
+        // it after each test.
         const { hideCatcher } = await import("../../../src/features/upload/mascot.js");
         hideCatcher();
     });
@@ -344,8 +341,8 @@ describe("UploadPage", () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Without this the PDF export keeps reusing the snapshot the Insights
-        // screen published for the previous dataset.
+        // The insights: snapshot is invalidated, so the PDF export does not reuse
+        // the previous dataset's snapshot.
         expect(DataCache.invalidate).toHaveBeenCalledWith("insights:");
 
         Date.now.mockRestore();
@@ -395,9 +392,8 @@ describe("UploadPage", () => {
             const progressOverlay = document.getElementById("progressOverlay");
             expect(progressOverlay.hidden).toBe(false);
 
-            // A payload-level error with no jobId/fileName must not auto-complete a
-            // job while two are in flight. The old fallback grabbed the first active
-            // job (Shares), so completing Comments below then emptied the queue.
+            // A payload-level error with no jobId or fileName does not complete a
+            // job while two are in flight.
             await workerInstance.listeners.message[0]({
                 data: { type: "error", payload: { message: "boom" } },
             });
@@ -418,8 +414,7 @@ describe("UploadPage", () => {
             });
             await new Promise((resolve) => setTimeout(resolve, 0));
 
-            // The first file is still processing, so the overlay must stay up. With
-            // the bug the stray error had completed it and the overlay hid early.
+            // The first file is still processing, so the overlay stays up.
             expect(progressOverlay.hidden).toBe(false);
         } finally {
             globalThis.FileReader = originalFileReader;
@@ -490,7 +485,7 @@ describe("UploadPage", () => {
 
         document.getElementById("clearAllBtn").click();
         await new Promise((resolve) => setTimeout(resolve, 0));
-        // Clearing now would let the pending save write the upload back after it.
+        // Clear waits for the pending save, so clearAll has not run yet.
         expect(Storage.clearAll).not.toHaveBeenCalled();
 
         finishSave();
@@ -1634,8 +1629,8 @@ describe("UploadPage", () => {
 
 
     it("schedules prime via setTimeout when requestIdleCallback is unavailable", async () => {
-        // The idle prime path now runs only on a worker restart (the page load no
-        // longer primes; the dashboard reads the persisted analyticsBase directly).
+        // The idle prime path runs on a worker restart. The page load does not prime;
+        // the dashboard reads the persisted analyticsBase directly.
         // Counter-advancing rAF so animations terminate without real time under fake timers.
         let rafCounter = 0;
         window.requestAnimationFrame = vi.fn((cb) => {
@@ -1685,8 +1680,8 @@ describe("UploadPage", () => {
 
 
     it("schedules prime via requestIdleCallback when available", async () => {
-        // The idle prime path now runs only on a worker restart. Use a deferred
-        // idle callback so we can verify the branch is taken and fire it manually.
+        // The idle prime path runs on a worker restart. The idle callback is deferred
+        // so the test can verify the branch and fire it manually.
         let idleCb = null;
         window.requestAnimationFrame = vi.fn((cb) => {
             cb(0);
@@ -1812,10 +1807,9 @@ describe("UploadPage", () => {
     });
 
     it("primes the worker with stored shares/comments before a new upload's addFile", async () => {
-        // WP5.3: the page load no longer primes the worker; instead an upload
-        // seeds the worker with the already-stored shares/comments first, so a
-        // new analytics file recomputes from the full set. The restoreFiles must
-        // therefore reach the worker before the addFile for the new upload.
+        // An upload primes the worker with the stored shares and comments before its
+        // addFile, so a new analytics file recomputes from the full set. The
+        // restoreFiles post must reach the worker before the addFile.
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
@@ -1870,8 +1864,7 @@ describe("UploadPage", () => {
         expect(await restoreCall.payload.commentsCsv.text()).toContain("comments-head");
         // ...and lands before the new file's addFile so the recompute sees both.
         expect(addIndex).toBeGreaterThan(restoreIndex);
-        // Connections always travels with the prime so the worker can correlate
-        // posting with network growth; none stored here, so it primes empty.
+        // connectionsCsv is always part of the prime. None is stored here, so it is null.
         expect(restoreCall.payload).toHaveProperty("connectionsCsv", null);
 
         globalThis.FileReader = originalFileReader;
@@ -1909,8 +1902,8 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Earlier jobs finishing while the prime awaits storage must not finish
-        // a run these files already joined, so the join comes after the prime.
+        // The run is joined only after the prime, so earlier jobs finishing during
+        // the storage read cannot finish it early.
         expect(order.indexOf("start")).toBeGreaterThan(order.indexOf("restoreFiles"));
         expect(order.indexOf("restoreFiles")).toBeGreaterThanOrEqual(0);
 
@@ -1986,9 +1979,8 @@ describe("UploadPage", () => {
             };
         };
 
-        // Only a connections file is stored, no shares/comments yet. The prime
-        // must still post restoreFiles so the worker retains connections for the
-        // first shares upload's recompute instead of waiting for a re-upload.
+        // Only a connections file is stored. The prime still posts restoreFiles, so
+        // the worker holds the connections for the first shares upload's recompute.
         const cachedFiles = [{ type: "connections", rowCount: 5, updatedAt: 30 }];
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getFile.mockImplementation((type) => {
@@ -2023,11 +2015,10 @@ describe("UploadPage", () => {
     });
 
     it("serializes overlapping primes so restoreFiles stays ordered before addFile", async () => {
-        // A worker restart's idle re-prime can be mid text-load when a fresh
-        // upload's immediate prime fires. Both primes load shares/comments
-        // asynchronously; the serialization must keep their restoreFiles posts
-        // ordered so neither lands after the new file's addFile (which would
-        // revert the worker to the stored set).
+        // A worker restart's idle re-prime can still be loading text when an upload's
+        // immediate prime starts. Both primes load shares and comments asynchronously,
+        // and they are serialized so every restoreFiles post precedes the new file's
+        // addFile.
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
@@ -2100,9 +2091,8 @@ describe("UploadPage", () => {
     });
 
     it("keeps the upload working when the prime's postMessage throws", async () => {
-        // postMessage can throw synchronously (DataCloneError / invalid state).
-        // Priming is best-effort, so a failed restoreFiles post must not reject
-        // the serialized chain and stall the upload's awaited prime.
+        // postMessage can throw synchronously. Priming is best-effort: a failed
+        // restoreFiles post does not reject the serialized chain or stall the upload.
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
@@ -3653,8 +3643,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Covers the case where no prior prime was scheduled (empty signature),
-    // and an immediate-priority prime fires clearPrimeSchedule + primeNow.
+    // No prime was scheduled before (empty signature), so the immediate prime runs
+    // clearPrimeSchedule and primeNow.
 
     it("primes worker via immediate path when no prior signature exists", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4138,8 +4128,7 @@ describe("UploadPage", () => {
     });
 
 
-    // jsdom does not fire click events on disabled buttons, so dispatch the
-    // event directly on the element using a non-trusted Event to bypass that.
+    // Dispatches a click event directly on the disabled button.
 
     it("openAnalyticsBtn listener returns early when button is disabled", async () => {
         UploadPage.init();
@@ -4148,8 +4137,6 @@ describe("UploadPage", () => {
         const btn = document.getElementById("openAnalyticsBtn");
         btn.disabled = true;
 
-        // Use a plain Event (not MouseEvent) so jsdom still delivers it even though
-        // the button is disabled, disabled only suppresses MouseEvent click delivery.
         btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -4158,8 +4145,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Set a rejecting session cleanup promise before the module is imported so
-    // Session.waitForCleanup() swallows it and restoreState continues.
+    // A rejected session cleanup promise is set before the module loads.
+    // Session.waitForCleanup() swallows it, and restoreState continues.
 
     it("does not throw when session cleanup promise rejects during restoreState", async () => {
         setupUploadDom();
@@ -4185,8 +4172,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Remove offlineBanner from DOM BEFORE the window 'offline' event fires so
-    // elements.offlineBanner is null, hitting the early-return on line 212.
+    // Removes the offline banner before the window 'offline' event fires, so
+    // updateOfflineBanner finds no element and returns early.
 
     it("updateOfflineBanner returns early when offlineBanner element is missing", async () => {
         setupUploadDom();
@@ -4230,8 +4217,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Upload a 'messages' file but Storage.getAllFiles returns NO messages file
-    // so files.find(…) returns undefined, hitting the early return .
+    // Uploads a messages file while Storage.getAllFiles returns no messages file,
+    // so the lookup finds nothing and the function returns early.
 
     it("syncTypeSpecificFileCache returns early when file type not in stored files", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4283,8 +4270,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Capture the jobId from the worker postMessage and echo it back so that
-    // pendingFiles.has(jobId) is true, covering the jobId-lookup branch.
+    // The worker echoes the jobId from the addFile post, so pendingFiles.has(jobId)
+    // is true and the jobId lookup matches.
 
     it("consumePendingFile resolves by jobId when worker echoes the jobId", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4342,8 +4329,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Send a 'fileProcessed' message where jobId is null AND fileName is ''
-    // so both the jobId branch and the fileName-loop are skipped.
+    // Sends a 'fileProcessed' message with a null jobId and an empty fileName,
+    // so neither lookup matches.
 
     it("consumePendingFile returns null when jobId and fileName are both empty", async () => {
         UploadPage.init();
@@ -4433,8 +4420,8 @@ describe("UploadPage", () => {
     });
 
 
-    // Remove all .file-status-item elements so STATUS_ITEMS has null item/label
-    // references; updateFileStatus should return early without throwing.
+    // Removes the file status items, so updateFileStatus has no elements and
+    // returns early without throwing.
 
     it("updateFileStatus returns early when status elements are missing from DOM", async () => {
         // Remove all file status items before init so they are null at init time
@@ -4547,8 +4534,8 @@ describe("UploadPage", () => {
 
     it("clearPrimeSchedule cancels a pending idle callback prime", async () => {
         setupUploadDom();
-        // Override RIC AFTER setupUploadDom to prevent it from being reset.
-        // The mock does NOT fire the callback immediately so primeIdleId stays set.
+        // Set after setupUploadDom so the mock is not replaced. The callback is not
+        // fired, so primeIdleId stays set.
         window.requestIdleCallback = vi.fn(
             () => 42, // non-zero idle id so clearPrimeSchedule calls cancelIdleCallback
         );

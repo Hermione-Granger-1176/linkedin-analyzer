@@ -7,9 +7,8 @@ const { expect, test } = require("@playwright/test");
 const MARKER_PREFIX = "linkedin-analyzer:run:";
 const CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
 const RUN_CHANNEL = "linkedin-analyzer:runs";
-// A recent marker with no answering owner is rechecked once it turns stale
-// (three 5-second heartbeats), so the "did not finish" notice can take up to
-// about 15 seconds after a crash.
+// A marker with no answering owner is rechecked once it is stale (three 5-second
+// heartbeats), so the notice can take up to about 15 seconds after a crash.
 const NOTICE_TIMEOUT_MS = 30000;
 
 let exportDir = "";

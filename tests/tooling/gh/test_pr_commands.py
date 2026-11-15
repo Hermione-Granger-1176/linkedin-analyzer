@@ -97,7 +97,7 @@ def _run(
     return {"name": name, "status": status, "conclusion": conclusion, "details_url": f"u/{name}"}
 
 
-# --- primary path: the exact gh command the Makefile used to run -----------------------------
+# Primary path: gh commands
 
 
 @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ def _run(
     ],
 )
 def test_gh_is_the_primary_path(call: Callable[[Recorder], int], expected: list[str]) -> None:
-    """On a machine with GraphQL, each command runs the same gh invocation as before."""
+    """With GraphQL available, each command runs its gh invocation."""
     recorder = Recorder()
 
     assert call(recorder) == 0
@@ -150,7 +150,7 @@ def test_gh_is_the_primary_path(call: Callable[[Recorder], int], expected: list[
 
 
 def test_primary_path_returns_the_gh_exit_code() -> None:
-    """A failing check keeps its exit code so the target still fails."""
+    """The gh exit code is returned unchanged."""
     assert pr_commands.pr_checks_status(run_fn=Recorder(completed_process(1))) == 1
 
 
@@ -165,7 +165,7 @@ def test_create_with_a_title_pipes_the_body_to_gh() -> None:
     assert options["input"] == "Body"
 
 
-# --- REST fallback --------------------------------------------------------------------------
+# REST fallback
 
 
 def _compare(endpoint: str, *messages: str) -> Route:
@@ -236,7 +236,7 @@ def test_create_fallback_compares_a_fork_head_against_the_selected_base(
 def test_create_fallback_compares_the_pushed_commit_for_a_same_organization_fork(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``org:feature`` cannot tell one organization's repositories apart, so the SHA is used."""
+    """Same-organization forks compare the pushed SHA, since ``org:feature`` is ambiguous."""
     monkeypatch.setenv("GH_REPO", "org/project")
     runner = FakeGh(
         [
@@ -297,7 +297,7 @@ def test_create_fallback_reads_commits_across_compare_pages() -> None:
 
 
 def test_create_fallback_rejects_a_branch_with_no_commits() -> None:
-    """Nothing ahead of the base cannot be filled."""
+    """A branch with no commits ahead of the base raises GhError."""
     runner = _create_sandbox(
         (has("rev-parse"), completed_process(0, "feature\n")),
         (rest("GET", "repos/o/r/compare/dev...abc"), json_response({"commits": []})),
@@ -328,7 +328,7 @@ def test_create_fallback_requires_the_pushed_head(
 
 
 def test_create_fallback_refuses_a_detached_head() -> None:
-    """A detached HEAD has no branch to open a PR from, so no push advice is given."""
+    """A detached HEAD raises GhError without push advice."""
     runner = _create_sandbox((has("rev-parse"), completed_process(0, "HEAD\n")))
 
     with pytest.raises(GhError, match="HEAD is detached"):
@@ -336,7 +336,7 @@ def test_create_fallback_refuses_a_detached_head() -> None:
 
 
 def test_create_fallback_keeps_the_real_error_of_a_failed_branch_lookup() -> None:
-    """Only a 404 means unpushed. A permission error surfaces as itself."""
+    """Only a 404 is reported as unpushed. Other errors are raised unchanged."""
     runner = _create_sandbox(
         (has("rev-parse"), completed_process(0, "feature\n")),
         remote=completed_process(1, "", "Resource not accessible by integration (HTTP 403)"),
@@ -539,7 +539,7 @@ def test_diff_fallback_requests_the_diff_media_type(capsys: pytest.CaptureFixtur
 def test_checkout_fallback_refuses_when_gh_repo_is_not_origin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """PR numbers are per repository, so origin's pull/<n>/head would be a different PR."""
+    """Refuses when origin is not the GH_REPO repository, since PR numbers are per repository."""
     monkeypatch.setenv("GH_REPO", "org/project")
     runner = FakeGh(sandbox_routes("alice/project"))
 
@@ -550,7 +550,7 @@ def test_checkout_fallback_refuses_when_gh_repo_is_not_origin(
 
 
 def test_checkout_fallback_refuses_a_non_github_origin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An origin that is not on GitHub holds no PRs, so GH_REPO cannot be fetched from it."""
+    """Refuses when origin is not a GitHub remote."""
     monkeypatch.setenv("GH_REPO", "o/r")
     runner = FakeGh(
         [(has("remote"), completed_process(0, "https://gitlab.com/o/r.git\n")), *sandbox_routes()]
@@ -596,7 +596,7 @@ def test_create_fallback_checks_a_fork_branch_and_qualifies_its_head(
 def test_create_fallback_names_the_source_repository_inside_one_organization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fork inside the same organization needs head_repo, which names its repository."""
+    """A same-organization fork sends head_repo with its repository name."""
     monkeypatch.setenv("GH_REPO", "org/project")
     runner = FakeGh(
         [
@@ -625,7 +625,7 @@ def test_create_fallback_names_the_source_repository_inside_one_organization(
 
 
 def test_create_fallback_sends_no_head_repo_within_one_repository() -> None:
-    """A same-repository PR needs no head_repo."""
+    """A same-repository PR sends no head_repo."""
     runner = FakeGh(
         [
             *sandbox_routes("o/r"),
@@ -647,7 +647,7 @@ def test_create_fallback_sends_no_head_repo_within_one_repository() -> None:
 
 
 def test_checkout_fallback_prefixes_a_fork_branch_and_records_its_pr() -> None:
-    """A fork's main checks out as alice/main, so local main is never fast-forwarded."""
+    """A fork's main branch is checked out as alice/main, leaving local main untouched."""
     head = {"ref": "main", "sha": "abc", "repo": {"full_name": "alice/r"}}
     runner = _sandbox(
         _pull_route({**PULL, "head": head}),
@@ -701,7 +701,7 @@ def test_checkout_fallback_tracks_a_read_only_fork_pr_through_the_pull_ref() -> 
 
 
 def test_checkout_fallback_tracks_a_deleted_fork_through_the_pull_ref() -> None:
-    """A PR whose head repository is gone has no clone URL, so it uses the PR ref."""
+    """A PR whose head repository was deleted tracks the PR ref on origin."""
     runner = _fork_checkout(None, maintainer_can_modify=True)
 
     assert runner.calls[-2:] == [
@@ -842,7 +842,7 @@ def test_merge_fallback_keeps_forked_default_and_unnamed_branches(head: dict[str
 def test_merge_fallback_only_warns_when_the_branch_delete_fails(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The merge already happened, so a failed branch delete is a warning."""
+    """A failed branch delete after a successful merge is a warning."""
     runner = _sandbox(
         _pull_route(),
         (rest("PUT", "repos/o/r/pulls/7/merge"), json_response({})),

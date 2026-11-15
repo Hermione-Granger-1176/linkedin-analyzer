@@ -10,9 +10,9 @@
 /** OWASP formula injection prefixes (= + - @ TAB CR LF). */
 const FORMULA_PREFIXES = new Set(["=", "+", "-", "@", "\t", "\r", "\n"]);
 
-// Control characters XML 1.0 forbids in a worksheet cell. Spreadsheet writers
-// reject them, so they are stripped from every exported cell. Tab (0x09),
-// newline (0x0A), and carriage return (0x0D) are legal and excluded.
+// Control characters that XML 1.0 forbids in a worksheet cell. They are stripped
+// from every exported cell. Tab (0x09), newline (0x0A), and carriage return
+// (0x0D) are legal and excluded.
 const ILLEGAL_XML_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g;
 
 const MISSING_STRINGS = new Set([
@@ -32,9 +32,8 @@ const MISSING_STRINGS = new Set([
     "<NA>",
 ]);
 
-// Length of the longest sentinel in MISSING_STRINGS. Derived from the set so the
-// fast-path stays correct if a longer sentinel is ever added. Used as a cheap
-// upper bound so isMissing can skip the uppercase + Set lookup for longer values.
+// Length of the longest sentinel in MISSING_STRINGS, derived from the set. isMissing
+// uses it as an upper bound to skip the uppercase and Set lookup for longer values.
 const MISSING_MAX_LENGTH = Math.max(...Array.from(MISSING_STRINGS, (s) => s.length));
 
 /** @type {Readonly<Record<string, string>>} */
@@ -82,9 +81,8 @@ export function isMissing(value) {
         if (trimmed === "") {
             return true;
         }
-        // No MISSING_STRINGS sentinel is longer than MISSING_MAX_LENGTH, so a
-        // longer trimmed value cannot be one. Skipping the uppercase + Set lookup
-        // here avoids a per-cell allocation on the common case (real content cells).
+        // A trimmed value longer than MISSING_MAX_LENGTH matches no sentinel, so it
+        // returns false without the uppercase and Set lookup.
         if (trimmed.length > MISSING_MAX_LENGTH) {
             return false;
         }
@@ -145,9 +143,8 @@ function cleanEscapedQuotesText(value) {
     }
 
     const text = String(value);
-    // Both passes only rewrite quote/backslash sequences, so text with neither
-    // character is returned unchanged. This skips two regex scans over the long
-    // message/comment bodies that make up the common case.
+    // Both passes only rewrite quote and backslash sequences, so text containing
+    // neither is returned trimmed without the regex passes.
     if (!text.includes('"') && !text.includes("\\")) {
         return text.trim();
     }
@@ -266,10 +263,9 @@ function pad2(number) {
 }
 
 /**
- * Fast path for the form LinkedIn actually writes, "YYYY-MM-DD HH:MM:SS" with
- * an optional " UTC", nothing around it. It gives exactly what `cleanDate`
- * gives for that form, with two time zone lookups instead of six and no
- * splitting. Anything else returns null and takes the general path.
+ * Fast path for the form LinkedIn writes: "YYYY-MM-DD HH:MM:SS" with an optional
+ * " UTC" suffix and nothing around it. For that form it gives the same result as
+ * `cleanDate`. Anything else returns null and takes the general path.
  * @param {string} value - Raw date value
  * @returns {string|null}
  */
@@ -299,10 +295,9 @@ function cleanStandardDate(value) {
     if (!dateMatchesComponents(utcDate, year, month, day, hour, minute, second)) {
         return null;
     }
-    // Local fields are the UTC fields of the instant moved by its own offset.
-    // getTimezoneOffset() drops the seconds of an old local-mean-time offset;
-    // the true offset is then under a minute away, so matching seconds proves
-    // the two are the same, and a mismatch takes the general path.
+    // Local fields are the UTC fields of the instant shifted by its offset.
+    // getTimezoneOffset() drops seconds from historical local-mean-time offsets,
+    // so a seconds mismatch returns null and the general path runs.
     const offsetMs = Math.round(utcDate.getTimezoneOffset() * 60000);
     const local = new Date(utcDate.getTime() - offsetMs);
     if (local.getUTCSeconds() !== utcDate.getSeconds()) {

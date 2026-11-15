@@ -19,16 +19,16 @@ const MESSAGES_CSV = [
     'c2,Sam Self,Bob,2025-01-03 10:00:00 UTC,"Hello Bob",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
 ].join("\n");
 
-// One conversation, both directions, so the messages file alone cannot say who
-// the account owner is: the case the connections file exists to settle.
+// One conversation in both directions. The messages file alone cannot identify
+// the account owner, so the connections file decides it.
 const TIED_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
     'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
     'c1,Ada,Sam Self,2025-01-02 10:00:00 UTC,"Hi Sam",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/sam',
 ].join("\n");
 
-// Ada carries no connection date, which the cleaner drops the whole row for.
-// Both paths derive their keys from the parsed rows, so both still find her.
+// Ada has no connection date, so the cleaner drops her row. The contact keys
+// are built from the raw parsed rows, so she still matches.
 const CONNECTIONS_CSV = [
     "Notes:",
     "Export metadata",
@@ -84,9 +84,9 @@ describe("loadRecentThreads", () => {
     });
 
     it("sends the raw connections file to the worker and parses nothing here", async () => {
-        // Pass the connections source to the worker for the account-owner tiebreak.
-        // Spy on both parser entry points because the cleaner calls its local
-        // parseCSV binding without using the exported method.
+        // The raw connections source goes to the worker for the account-owner tiebreak.
+        // Spies on both parser entry points. The cleaner calls its local parseCSV
+        // binding, not the exported method.
         const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
         const processFile = vi.spyOn(LinkedInCleaner, "process");
         const pending = loadRecentThreads(MESSAGES_CSV, CONNECTIONS_CSV);
@@ -110,9 +110,9 @@ describe("loadRecentThreads", () => {
     });
 
     it("scales the watchdog with the connections file as well", async () => {
-        // The worker reads both files now, so a budget scaled to the messages
-        // export alone would fire early on a large connections export and send
-        // a parse the worker was still doing to the UI thread instead.
+        // The worker reads both files, so the timeout scales with the connections
+        // file too. Scaling by the messages export alone would time out early on
+        // a large connections export.
         vi.useFakeTimers();
         const threeMbConnections = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMbConnections.length).toBeGreaterThan(3 * 1024 * 1024);
@@ -120,8 +120,8 @@ describe("loadRecentThreads", () => {
 
         const pending = loadRecentThreads(MESSAGES_CSV, threeMbConnections);
 
-        // 30s base plus 5s per whole megabyte: 45s, where the messages file
-        // alone would have bought 30s.
+        // 30s base plus 5s per whole megabyte: 45s here, against 30s for the
+        // messages file alone.
         vi.advanceTimersByTime(30001);
         expect(captureError).not.toHaveBeenCalled();
 
@@ -142,9 +142,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("ends an earlier request rather than letting two share the worker", async () => {
-        // Both requests would otherwise own the same module-level watchdog and
-        // settle hook, and whichever the worker answered first would clear the
-        // other's - leaving that promise pending for the life of the page.
+        // A new request ends the earlier one, so the two never share the
+        // module-level watchdog and settle hook.
         const first = loadRecentThreads(MESSAGES_CSV, "");
         const worker = harness.instance;
         const second = loadRecentThreads(MESSAGES_CSV, "");
@@ -158,8 +157,7 @@ describe("loadRecentThreads", () => {
             },
         });
 
-        // The cancelled one resolves rather than hanging, and does not re-run
-        // the abandoned work on the UI thread.
+        // The cancelled request resolves to an empty result and does not run on the UI thread.
         expect(await first).toEqual([]);
         expect(await second).toEqual([{ name: "Ada", messages: [] }]);
     });
@@ -218,8 +216,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // A failure for an unknown request does not establish that this file failed.
-        // Permit the small-file fallback and settle without advancing the timer.
+        // A failure for an unknown request does not count as this file failing,
+        // so the small-file fallback runs.
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = harness.instance;
@@ -275,9 +273,8 @@ describe("loadRecentThreads", () => {
     it("cancels a worker error event so the browser cannot report it", async () => {
         const preventDefault = vi.fn();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        // An uncancelled error event on a Worker is reported by the browser
-        // itself, and that report reaches the console with the worker's own
-        // message - here, text parsed straight out of the messages CSV.
+        // An uncancelled error event is logged by the browser, with the worker's
+        // message. Here that message could hold text from the messages CSV.
         harness.instance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
         await pending;
 
@@ -299,10 +296,8 @@ describe("loadRecentThreads", () => {
         expect(worker.postMessage).toHaveBeenCalled();
 
         terminateThreadsWorker();
-        // No timer is advanced and no event is emitted: terminating removed
-        // every one of them, so cancellation alone has to end the request.
-        // Left pending, loadRecentThreads() never returns and its frame keeps
-        // the whole raw messages CSV alive for the life of the page.
+        // No timer is advanced and no event is emitted. Termination removes every
+        // listener, so cancelling alone settles the request.
         const threads = await pending;
 
         expect(threads).toEqual([]);
@@ -314,8 +309,8 @@ describe("loadRecentThreads", () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "");
         terminateThreadsWorker();
 
-        // The main-thread fallback would answer with these threads; redoing the
-        // parse is exactly the work the user cancelled.
+        // A cancelled request does not fall back to the main thread, which would
+        // redo the parse the user cancelled.
         expect(await pending).toEqual([]);
         expect(captureError).not.toHaveBeenCalled();
     });
@@ -450,8 +445,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("breaks the tie on the main thread with the same keys the worker derives", async () => {
-        // The fallback must derive the same tiebreak keys as the worker.
-        // Keep Ada's row even without a connection date, which cleaning would drop.
+        // The fallback derives the same tiebreak keys as the worker, and keeps
+        // rows without a connection date.
         harness.uninstall();
 
         const unaided = await loadRecentThreads(TIED_CSV, "");
@@ -505,10 +500,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("counts the connections file against the fallback ceiling too", async () => {
-        // The fallback parses both files: the messages export for the threads,
-        // the connections export for the tiebreak keys. A ceiling that measured
-        // only the first would wave through a small messages file beside a huge
-        // connections one and then parse all of it on the UI thread.
+        // The fallback parses both files, so the ceiling counts the connections
+        // file too.
         harness.uninstall();
         const hugeContacts = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
 
@@ -518,9 +511,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("still selects on the main thread just under the fallback ceiling", async () => {
-        // The positive control for the test above: same padded shape, only
-        // shorter. Without this, an empty result there could equally mean the
-        // padding broke the parser, and deleting the size guard would not fail.
+        // Positive control for the test above: same padded shape, under the
+        // ceiling. Without it, an empty result could mean the padding broke the parser.
         harness.uninstall();
         const padded = `${MESSAGES_CSV}\n${"# padding\n".repeat(10)}`;
 
@@ -533,9 +525,9 @@ describe("loadRecentThreads", () => {
 
     it("scales the watchdog with the size of the export", async () => {
         // The shared budget from messages/format.js: a 30s base plus 5s per
-        // whole megabyte, which is 45s here. The only other timeout test
-        // advances 60s against a three-line CSV, so it would pass for a
-        // constant, and the base is asserted through a size that crosses it.
+        // whole megabyte, which is 45s here. A timeout on a small CSV cannot tell
+        // a constant from a scaled budget, so this test uses a size that crosses
+        // the 30s base.
         vi.useFakeTimers();
         const threeMb = `${MESSAGES_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);

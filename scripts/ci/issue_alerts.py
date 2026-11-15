@@ -26,9 +26,8 @@ ALERT_BODY_LEADS = {
 }
 ALERT_STATES = frozenset(ALERT_BODY_LEADS)
 
-# `gh issue list` caps at this many results. Alert issues are addressed by an
-# exact title within a single label, so reaching the cap means the label has
-# been reused for unrelated issues and the match can no longer be trusted.
+# `gh issue list` returns at most this many results. Reaching the cap means the
+# label may hold unrelated issues, so the title match is not trusted.
 ISSUE_MATCH_LIMIT = 100
 
 LABEL_COLOR = "B60205"
@@ -123,16 +122,14 @@ def find_alert_issue(
 ) -> dict[str, object] | None:
     """Return the open issue that exactly matches ``title`` within ``label``.
 
-    Filtering by label first keeps the search bounded to issues this alert
-    owns. `gh issue list` never returns pull requests, so no extra filtering
-    is needed to keep a same-titled pull request from being mistaken for the
-    alert issue.
+    Filtering by label first bounds the search to issues this alert owns.
+    `gh issue list` returns no pull requests, so a same-titled PR cannot match.
     """
     issues = _list_open_labeled_issues(repo, title, label, run_fn=run_fn)
     matches = [issue for issue in issues if issue.get("title") == title]
     if not matches:
         return None
-    # Oldest issue wins so repeated syncs converge on one issue even if a
+    # The oldest match wins, so repeated syncs converge on one issue even when a
     # duplicate was opened by hand.
     return min(matches, key=_issue_number)
 
@@ -223,8 +220,8 @@ def _comment_on_alert_issue(
 ) -> str:
     """Add ``body`` as a comment on the alert issue and return its URL."""
     number = _issue_number(existing)
-    # Validated before commenting so a malformed payload cannot leave a comment
-    # behind on an issue this call then fails to report.
+    # Validated before commenting, so a malformed payload fails before any comment
+    # is posted.
     url = _issue_url(existing)
     gh_runner.run_gh(
         ["issue", "comment", str(number), "--repo", repo, "--body", body],
@@ -245,14 +242,13 @@ def sync_alert_issue(
     """Open, comment on, or close one alert issue addressed by exact title.
 
     Returns the issue URL while the alert should exist, and an empty string
-    once it should not. An existing issue is commented on rather than
-    rewritten so the failure timeline survives across runs.
+    once it should not. An existing issue is commented on rather than rewritten,
+    which keeps the failure timeline.
     """
     _require_argument(title, "title")
     _require_argument(label, "label")
-    # Ensure this before the lookup, not only before a create, so syncing a
-    # recovery on a repository that has never failed cannot fail on a label
-    # that does not exist yet.
+    # The label is ensured before the lookup, so a recovery sync on a repository
+    # without the label does not fail.
     ensure_label(repo, label, f"Alerts for: {title}", run_fn=run_fn)
     existing = find_alert_issue(repo, title, label, run_fn=run_fn)
 
@@ -269,8 +265,7 @@ def sync_alert_issue(
 def _read_detail(detail_file: str | None) -> str:
     """Read alert detail from a file or stdin, or return an empty string.
 
-    The path ``-`` reads stdin, which lets Make pass workflow output without shell
-    interpolation. An omitted path or empty input produces no detail.
+    The path ``-`` reads stdin. An omitted path or empty input produces no detail.
     """
     if detail_file is None:
         return ""

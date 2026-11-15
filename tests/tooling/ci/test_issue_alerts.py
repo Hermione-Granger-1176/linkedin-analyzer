@@ -79,7 +79,7 @@ def test_build_alert_body_appends_only_meaningful_detail() -> None:
     ],
 )
 def test_build_alert_body_rejects_unusable_run_urls(run_url: str, message: str) -> None:
-    """A miswired workflow cannot point an alert at an arbitrary destination."""
+    """Run URLs must be HTTPS links to an Actions run."""
     with pytest.raises(GhError, match=message):
         issue_alerts.build_alert_body(state="open", run_url=run_url)
 
@@ -106,7 +106,7 @@ def test_find_alert_issue_returns_none_without_a_title_match() -> None:
 
 
 def test_find_alert_issue_prefers_the_oldest_duplicate() -> None:
-    """Repeated syncs converge on one issue when a duplicate was opened by hand."""
+    """Returns the lowest-numbered matching issue when duplicates exist."""
     runner = FakeGh([_list_route([_issue(31), _issue(12), _issue(20)])])
 
     match = issue_alerts.find_alert_issue(_REPO, _TITLE, _LABEL, run_fn=runner)
@@ -115,7 +115,7 @@ def test_find_alert_issue_prefers_the_oldest_duplicate() -> None:
 
 
 def test_find_alert_issue_fails_closed_when_results_may_be_truncated() -> None:
-    """A saturated label cannot silently produce a duplicate alert issue."""
+    """A result list at the 100-item limit raises GhError."""
     saturated = [_issue(number, title="Unrelated") for number in range(1, 101)]
     runner = FakeGh([_list_route(saturated)])
 
@@ -139,7 +139,7 @@ def test_find_alert_issue_validates_the_response_shape(payload: str, message: st
 
 
 def test_sync_alert_issue_creates_a_labelled_issue_when_none_exists() -> None:
-    """The first failure creates the label and the alert issue together."""
+    """Creates the label and the issue when no matching issue exists."""
     runner = FakeGh(
         [
             _list_route([]),
@@ -165,7 +165,7 @@ def test_sync_alert_issue_creates_a_labelled_issue_when_none_exists() -> None:
 
 
 def test_sync_alert_issue_comments_instead_of_rewriting_an_open_alert() -> None:
-    """A repeat failure preserves the timeline rather than overwriting the body."""
+    """A matching open issue receives a comment instead of a new body."""
     runner = FakeGh(
         [
             (has("label", "create"), completed_process(0, "")),
@@ -238,7 +238,7 @@ def test_sync_alert_issue_is_a_noop_when_recovery_finds_no_issue() -> None:
 
 
 def test_sync_alert_issue_ensures_the_label_before_looking_it_up() -> None:
-    """Recovery succeeds when no previous alert created the label."""
+    """Recovery ensures the label exists before it looks up the issue."""
     runner = FakeGh(
         [
             (has("label", "create"), completed_process(0, "")),
@@ -259,7 +259,7 @@ def test_sync_alert_issue_ensures_the_label_before_looking_it_up() -> None:
 
 
 def test_sync_alert_issue_rejects_a_creation_without_a_url() -> None:
-    """A silent create failure cannot be reported to the workflow as success."""
+    """An issue create that returns no URL raises GhError."""
     runner = FakeGh(
         [
             _list_route([]),
@@ -349,20 +349,17 @@ def test_read_detail_reads_a_file(tmp_path: Path) -> None:
 
 
 def test_read_detail_treats_no_file_as_no_detail() -> None:
-    """An omitted --detail-file means the caller had no detail to give.
+    """An omitted detail file yields an empty detail.
 
-    The Makefile leaves the flag off when stdin is a terminal, so this is the
-    ordinary path for a hand-run alert rather than an error.
+    The Makefile omits the flag when stdin is a terminal.
     """
     assert issue_alerts._read_detail(None) == ""
 
 
 def test_read_detail_reads_stdin_for_a_dash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``-`` means standard input, which is how the Makefile passes the detail.
+    """``-`` reads standard input, which the Makefile uses to pass the detail.
 
-    A failing workflow's output then never has to survive a make command line.
-    An empty stream is a valid answer: it means the alert has no detail, and
-    ``build_alert_body`` already omits it.
+    An empty stream returns an empty detail, which ``build_alert_body`` omits.
     """
     monkeypatch.setattr(sys, "stdin", io.StringIO("piped detail\n"))
     assert issue_alerts._read_detail("-") == "piped detail\n"

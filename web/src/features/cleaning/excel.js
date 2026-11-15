@@ -325,8 +325,7 @@ export const ExcelGenerator = (() => {
             normalizedSpec.rows,
             normalizedSpec.wrapColumns,
         );
-        // Loaded on demand so the export library stays out of the initial bundle
-        // and only downloads when a user actually generates a workbook.
+        // Loaded on demand, so the library is fetched only when a workbook is generated.
         const { default: writeXlsxFile } = await import("write-excel-file/browser");
         const workbook = writeXlsxFile(
             data,
@@ -338,7 +337,7 @@ export const ExcelGenerator = (() => {
     }
 
     /**
-     * Run a download and report how it ended, so a failure reaches the caller as a result.
+     * Run a download and report its outcome. Failures are returned, not thrown.
      * @param {() => Promise<void>} work - Builds and saves the workbook
      * @returns {Promise<DownloadResult>}
      */

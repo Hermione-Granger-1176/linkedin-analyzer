@@ -28,8 +28,8 @@ describe("parseCssColor", () => {
     });
 
     it("rejects a color whose alpha is not numeric syntax at all", () => {
-        // "none" does not match the alpha group, so the whole color fails to
-        // parse: that is a different outcome from falling back to opaque.
+        // A non-numeric alpha such as "none" fails the whole parse rather than
+        // falling back to opaque.
         expect(parseCssColor("rgba(10, 20, 30, none)")).toBeNull();
     });
 
@@ -90,7 +90,7 @@ describe("readPdfPalette", () => {
     });
 
     it("falls back to the built-in light values when the environment resolves nothing", () => {
-        // jsdom does not resolve custom properties, so this is the live path.
+        // jsdom does not resolve custom properties, so the built-in values are used.
         const palette = readPdfPalette();
 
         expect(palette["--bg-primary"]).toEqual({ r: 255, g: 253, b: 247 });
@@ -119,8 +119,8 @@ describe("readPdfPalette", () => {
 
         readPdfPalette();
 
-        // The probe is briefly mounted into the live document, so it has to be
-        // out of the accessibility tree and out of layout while it is there.
+        // The probe is mounted briefly in the live document. While mounted, it is
+        // hidden from assistive technology and from layout.
         expect(probe.className).toBe("theme-light");
         expect(probe.getAttribute("aria-hidden")).toBe("true");
         expect(probe.style.position).toBe("absolute");

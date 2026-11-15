@@ -110,8 +110,8 @@ def retry[T](
 ) -> T:
     """Return a fetched value with bounded backoff for transient failures.
 
-    Every attempt but the last is retried after a growing sleep. The last one
-    runs outside the handler, so its error reaches the caller.
+    Every attempt but the last is retried after a growing sleep. The last attempt
+    is not wrapped, so its error propagates.
     """
     if attempts < 1:
         raise ValueError("attempts must be at least 1")
@@ -138,8 +138,7 @@ def make_resolver(
         repo = "/".join(action.split("/")[:2])
         key = f"{repo}@{ref}"
         if key not in cache:
-            # An invalid SHA is retried like a failed fetch, so a transient bad
-            # response does not fail the run.
+            # An invalid SHA is retried like a failed fetch.
             cache[key] = retry(
                 lambda: _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref),
                 attempts=max_attempts,

@@ -1,18 +1,15 @@
 /**
  * Palette reader for the PDF export.
  *
- * The exported document is always light, warm-palette, regardless of the theme
- * the user is looking at. Duplicating hex values in JavaScript would silently
- * drift from the stylesheet, so the colors are read back out of the light
- * palette at export time by mounting a detached element that carries the
- * `.theme-light` class.
+ * The exported document always uses the light palette, whatever theme the user
+ * has selected. The colors are read from the stylesheet at export time, by
+ * mounting a detached element that carries the `.theme-light` class.
  */
 
 /**
  * The light-palette custom properties the export reads, in stylesheet order.
  *
- * A superset of what the layout engine currently draws with, so a token can be
- * used without also having to be plumbed through here.
+ * A superset of the tokens the layout engine draws with.
  */
 export const PDF_PALETTE_TOKENS = Object.freeze([
     "--bg-primary",
@@ -41,9 +38,8 @@ export const PDF_PALETTE_TOKENS = Object.freeze([
     "--text-on-accent",
 ]);
 
-// jsdom does not implement custom-property resolution, and a browser that fails
-// to apply the stylesheet would otherwise produce an all-black document. These
-// mirror the light values in variables.css.
+// Used for any token that cannot be resolved, such as under jsdom, which does not
+// implement custom-property resolution. Mirrors the light values in variables.css.
 const FALLBACK_PALETTE = Object.freeze({
     "--bg-primary": Object.freeze({ r: 255, g: 253, b: 247 }),
     "--bg-secondary": Object.freeze({ r: 253, g: 250, b: 245 }),
@@ -71,14 +67,14 @@ const FALLBACK_PALETTE = Object.freeze({
     "--text-on-accent": Object.freeze({ r: 255, g: 255, b: 255 }),
 });
 
-// The paper the tinted tokens are composited onto. Alpha in the stylesheet is
-// relative to the page background, and jsPDF has no alpha for plain fills.
+// Paper color that translucent tokens are composited onto. Alpha in the stylesheet
+// is relative to the page background, and jsPDF fills have no alpha.
 const COMPOSITE_BASE = Object.freeze({ r: 255, g: 253, b: 247 });
 
 const RGB_PATTERN =
     /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.%]+)\s*)?\)$/i;
-// Three, four, six or eight digits: the build minifies `rgba(r, g, b, a)` down
-// to hex, and the tinted tokens keep their alpha as a trailing pair.
+// Three, four, six or eight hex digits. The four- and eight-digit forms carry
+// alpha as a trailing pair.
 const HEX_PATTERN = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
 
 /**

@@ -1,11 +1,9 @@
 // First-party collector for Content-Security-Policy violation reports.
 //
 // The browser POSTs CSP reports here (configured via `report-uri` / `report-to`
-// + `Reporting-Endpoints` in vercel.json). Keeping the endpoint same-origin means
-// vercel.json never has to embed a Sentry org/project, and the forwarding secret
-// stays server-side. Before forwarding, reports are rebuilt from a bounded
-// allowlist of violation metadata and URL queries/fragments are removed. The app
-// never attaches uploaded file contents to these reports.
+// + `Reporting-Endpoints` in vercel.json). Before forwarding, reports are rebuilt
+// from a bounded allowlist of violation metadata, and URL queries and fragments
+// are removed. The app never attaches uploaded file contents to these reports.
 //
 // Without a forwarding destination, the function logs reduced metadata and
 // returns 204.
@@ -17,8 +15,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 // relays caller-chosen top-level keys or content types upstream.
 const DEFAULT_CONTENT_TYPE = "application/csp-report";
 
-// Await forwarding with a timeout. The serverless runtime may freeze pending
-// work after the response, so the handler waits before responding.
+// Forwarding is awaited, with this timeout, before the response is sent.
 const FORWARD_TIMEOUT_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_REPORT_MAX_PER_MINUTE = 120;
@@ -200,13 +197,13 @@ function parseCspReport(body) {
 // Genuine CSP tokens: directive names and the non-URL keyword sources browsers
 // put in blocked-uri (inline, eval, self, …) are all lowercase letters/hyphens.
 const CSP_KEYWORD = /^[a-z][a-z-]*$/;
-// Control characters, ASCII newlines, and the Unicode line/paragraph separators,
-// collapsed to spaces so an attacker cannot inject extra or multi-line log entries.
+// Control characters, ASCII newlines, and Unicode line and paragraph separators.
+// Matches are replaced with spaces.
 const CONTROL_CHARS = /[\u0000-\u001f\u007f\u2028\u2029]+/g;
 
 /**
- * Reduce an attacker-influenced field to a single safe log token: strip control
- * characters and newlines (no log injection / multi-line), trim, and bound length.
+ * Reduce a report field to a single-line token: strips control characters and
+ * newlines, trims, and bounds length.
  * @param {unknown} value - Raw field value.
  * @param {number} maxLength - Maximum length to keep.
  * @returns {string} The sanitized token.
@@ -344,9 +341,9 @@ function reduceCspReport(report) {
 
 /**
  * Build a single-line, host-only summary of a CSP violation for log search.
- * This endpoint is public, so every field is treated as untrusted: the blocked
- * value is reduced to a host, a scheme, or a known keyword (never a path/query),
- * and all fields are stripped of newlines and length-bounded.
+ * Every field is treated as untrusted: the blocked value is reduced to a host,
+ * a scheme, or a known keyword (never a path or query), and fields are stripped
+ * of newlines and length-bounded.
  * @param {object} report - A CSP violation object (either report shape).
  * @returns {string} A summary like `CSP violation: img-src blocked evil.example`.
  */
@@ -367,13 +364,11 @@ function summarizeReport(report) {
     if (typeof blockedUri === "string" && blockedUri) {
         try {
             const url = new URL(blockedUri);
-            // Schemes like data:/blob: have no host; fall back to the scheme only
-            // (never the full URI, which could embed inline content).
+            // Schemes like data: and blob: have no host, so only the scheme is kept.
             blocked = url.host || url.protocol;
         } catch {
-            // Not a URL: only echo genuine CSP keywords (inline, eval, self, …).
-            // Anything else from this public endpoint becomes a placeholder so no
-            // attacker-supplied path/query reaches the log.
+            // Not a URL: only CSP keywords (inline, eval, self, …) are kept.
+            // Anything else becomes a placeholder.
             const token = sanitizeToken(blockedUri, 64);
             blocked = CSP_KEYWORD.test(token) ? token : "(non-url)";
         }
@@ -382,8 +377,8 @@ function summarizeReport(report) {
 }
 
 /**
- * Forward a reduced report upstream. Best effort: a failed or timed-out
- * forward must never affect the response.
+ * Forward a reduced report upstream. Best effort: failures and timeouts are
+ * ignored.
  * @param {string} endpoint - Report endpoint URL.
  * @param {object} report - Reduced report.
  * @returns {Promise<void>}
@@ -401,7 +396,7 @@ async function forwardReport(endpoint, report) {
             signal: controller.signal,
         });
     } catch {
-        // Best-effort forwarding: a failed or timed-out report must never affect the response.
+        // Errors are ignored; the response does not depend on forwarding.
     } finally {
         clearTimeout(timeout);
     }
@@ -430,8 +425,8 @@ export default async function handler(req, res) {
         return;
     }
 
-    // Drop anything that is not a recognizable CSP report. The endpoint is open,
-    // so this prevents it from being used to relay arbitrary bodies upstream.
+    // Drops anything that is not a recognizable CSP report. Arbitrary bodies are
+    // never relayed upstream.
     const report = body ? reduceCspReport(parseCspReport(body)) : null;
     if (!report) {
         res.statusCode = 204;
@@ -449,10 +444,7 @@ export default async function handler(req, res) {
     if (endpoint) {
         await forwardReport(endpoint, report);
     } else {
-        // With no forwarding destination, leave a one-line, host-only trace so
-        // violations remain searchable in Vercel logs. Uses console.error because
-        // it is the only console method the lint policy permits server-side and a
-        // CSP violation is a security-relevant signal worth surfacing.
+        // With no forwarding destination, log a one-line, host-only summary.
         console.error(summarizeReport(report));
     }
 

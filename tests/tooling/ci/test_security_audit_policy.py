@@ -85,7 +85,7 @@ def test_load_config_reports_invalid_json_path(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_duplicate_json_keys(tmp_path: Path) -> None:
-    """Duplicate object keys cannot silently replace security policy."""
+    """Duplicate object keys raise ValueError."""
     config_file = _write_config(
         tmp_path / "security_audit.json",
         '{"npm_vulnerability_exceptions": [], "npm_vulnerability_exceptions": []}',
@@ -176,7 +176,7 @@ def test_load_exceptions_rejects_invalid_required_values(
     value: object,
     tmp_path: Path,
 ) -> None:
-    """Present fields still need the type and content required by policy."""
+    """Present fields must have the required type and non-empty content."""
     entry: dict[str, object] = {
         "id": "42",
         "package": "left-pad",
@@ -221,7 +221,7 @@ def test_load_exceptions_accepts_zero_numeric_id(tmp_path: Path) -> None:
 
 
 def test_load_exceptions_normalizes_surrounding_whitespace(tmp_path: Path) -> None:
-    """Policy identities and values do not retain accidental outer whitespace."""
+    """Outer whitespace is stripped from policy identities and values."""
     config_file = _write_config(
         tmp_path / "security_audit.json",
         """
@@ -248,7 +248,7 @@ def test_load_exceptions_normalizes_surrounding_whitespace(tmp_path: Path) -> No
 
 
 def test_load_exceptions_rejects_unknown_fields(tmp_path: Path) -> None:
-    """Typos in security-sensitive options cannot be ignored."""
+    """Unknown fields raise ValueError."""
     config_file = _write_config(
         tmp_path / "security_audit.json",
         """
@@ -319,7 +319,7 @@ def test_load_exceptions_rejects_non_boolean_fix_policy(tmp_path: Path) -> None:
 
 
 def test_load_exceptions_rejects_case_variant_duplicates(tmp_path: Path) -> None:
-    """Case variants cannot create two policies for the same advisory."""
+    """Case variants of one advisory ID are reported as duplicates."""
     config_file = _write_config(
         tmp_path / "security_audit.json",
         """

@@ -13,8 +13,7 @@ function catcher() {
 
 describe("upload catcher", () => {
     beforeEach(() => {
-        // jsdom has no matchMedia, and the catch asks it whether the visitor
-        // wants motion at all.
+        // Mocks matchMedia with reduced motion off, since jsdom does not provide it.
         mockMatchMedia(false);
         setupDom(`
             <div class="drop-zone" id="multiDropZone">
@@ -42,8 +41,7 @@ describe("upload catcher", () => {
 
             showCatcher();
 
-            // Same pose, still up, and nothing booked: the second call did not
-            // restart his entrance under the pointer.
+            // The pose stays ready, the catcher stays visible, and no timer is scheduled.
             expect(catcher().hasAttribute("hidden")).toBe(false);
             expect(catcher().getAttribute("data-pose")).toBe("ready");
             expect(vi.getTimerCount()).toBe(0);
@@ -58,7 +56,7 @@ describe("upload catcher", () => {
 
             expect(catcher().getAttribute("data-pose")).toBe("ready");
             expect(catcher().hasAttribute("hidden")).toBe(false);
-            // The catch's own timer was cleared with it, so he stays up.
+            // The catch's pending hide timer is cleared, so the catcher stays visible.
             vi.advanceTimersByTime(2000);
             expect(catcher().hasAttribute("hidden")).toBe(false);
         });

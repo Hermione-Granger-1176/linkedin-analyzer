@@ -4,17 +4,13 @@
  * Checks whether configured npm overrides are still necessary.
  *
  * Approach: copies package.json and .npmrc into a temporary directory with the
- * "overrides" field removed, runs `npm install --package-lock-only`
- * and the policy-driven audit from scripts/ci/run_npm_audit.py, then reports
- * whether everything passes without overrides. That audit applies the
- * reviewed exceptions in config/security_audit.json, so a finding that fails
- * with every override in place too cannot keep a stale override alive.
- * Temporary dev dependencies listed in config/security_audit.json are removed
- * alongside their overrides. If the audit passes, the overrides
- * are stale and can be removed.
+ * "overrides" field removed, runs `npm install --package-lock-only`, then runs
+ * the policy-driven audit from scripts/ci/run_npm_audit.py. The overrides are
+ * stale when that audit passes without them. Temporary dev dependencies listed
+ * in config/security_audit.json are removed alongside their overrides.
  *
  * This script is fully generic. It reads overrides dynamically from
- * package.json.  No package names or versions are hardcoded.
+ * package.json. No package names or versions are hardcoded.
  *
  * Flags:
  *   --fix   Remove stale overrides from package.json and update the
@@ -145,11 +141,10 @@ const testWithout = (overridesToRemove) => {
     }
 
     try {
-        // Reuse the policy-driven npm audit behind `make audit-node`, so reviewed
-        // exceptions, their expiry and fix limits, ambiguous matches, and npm
-        // error reports are judged exactly as CI judges them. It gates every
-        // severity by default; a higher floor would call an override stale
-        // because the advisory it holds back sits below the threshold.
+        // Runs the policy-driven npm audit that `make audit-node` uses, so reviewed
+        // exceptions, expiry, fix limits, ambiguous matches, and npm error reports
+        // are judged as CI judges them. Every severity is gated. A higher floor
+        // would report an override stale when its advisory sits below the threshold.
         execSync(`"${auditPython}" -m scripts.ci.run_npm_audit`, {
             cwd: tmp,
             stdio: "pipe",

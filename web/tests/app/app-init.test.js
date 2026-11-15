@@ -292,8 +292,8 @@ describe("app init wiring", () => {
         vi.resetModules();
         await import("../../src/app.js");
 
-        // Footer still shows so stale consent can be cleared, but the label must not
-        // claim diagnostics are on when the build can never send them.
+        // The footer stays visible so stale consent can be cleared. The label reads
+        // unavailable because this build cannot send diagnostics.
         expect(document.getElementById("appFooter").hidden).toBe(false);
         expect(document.getElementById("telemetryStatusLabel").textContent).toContain(
             "unavailable",
@@ -324,7 +324,7 @@ describe("app init wiring", () => {
         toggle.click(); // enable
         expect(banner.hidden).toBe(true);
         toggle.click(); // revoke
-        // Revoking settles the prompt; it must not pop the banner back up.
+        // Revoking leaves the banner hidden.
         expect(banner.hidden).toBe(true);
         expect(document.getElementById("appFooter").hidden).toBe(false);
 
@@ -348,7 +348,7 @@ describe("app init wiring", () => {
         expect(disableTelemetry).toHaveBeenCalled();
         expect(toggle.textContent).toContain("Turn on");
         expect(toggle.getAttribute("aria-pressed")).toBe("false");
-        // The footer stays visible after revoking so consent remains reversible.
+        // The footer stays visible after revoking, and the toggle can turn consent back on.
         expect(document.getElementById("appFooter").hidden).toBe(false);
 
         telemetryConsentGranted.mockReturnValue(false);

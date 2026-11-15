@@ -1,10 +1,8 @@
 """REST reads that stand in for ``gh pr view --json`` when GraphQL is blocked.
 
-``gh pr view`` uses GraphQL, so it fails in environments that refuse that
-endpoint. Each helper here rebuilds the JSON shape ``gh pr view --json``
-produces (upper-case check states, bot-free review logins, node-id review ids),
-so the summary, watch, and checks logic parses one format whichever path
-supplied it.
+Each helper rebuilds the JSON shape ``gh pr view --json`` produces (upper-case
+check states, bot-free review logins, node-id review ids), so callers parse one
+format whichever path supplied it.
 """
 
 from __future__ import annotations
@@ -17,8 +15,8 @@ from .gh_runner import GhError, RunFunction, require_mapping
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# gh accepts ``@copilot`` as a reviewer. The REST reviewer-request route has no
-# such alias, so it takes the bot's login instead.
+# gh accepts ``@copilot`` as a reviewer. The REST reviewer-request route takes the
+# bot's login instead.
 COPILOT_REVIEWER = "@copilot"
 COPILOT_REST_REVIEWER = "copilot-pull-request-reviewer[bot]"
 
@@ -60,7 +58,7 @@ def _check_run(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _run_id(entry: dict[str, Any]) -> int:
-    """Return a check run's numeric id (``0`` when missing), which grows with each new run."""
+    """Return a check run's numeric id (``0`` when missing). Newer runs have larger ids."""
     run_id = entry.get("id")
     return run_id if isinstance(run_id, int) else 0
 
@@ -74,8 +72,7 @@ def _suite_id(entry: dict[str, Any]) -> object:
 def _latest_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep only the newest check run of each name within each check suite.
 
-    A workflow re-run adds a run to the same suite, and an older failed run must
-    not outweigh the re-run that replaced it. Separate suites (another workflow,
+    A re-run replaces the earlier run's result. Separate suites (another workflow,
     event, or App) can reuse a name, so each keeps its own entry.
     """
     latest: dict[tuple[object, str], dict[str, Any]] = {}
@@ -103,12 +100,12 @@ def status_check_rollup(
     """Return the check runs and commit statuses on ``sha`` as a ``statusCheckRollup`` list.
 
     Only the newest run of each check name in each check suite is kept. The
-    combined status ``state`` is ignored on purpose: it reads ``pending`` for a commit with no
-    statuses at all, which would hold every settled rollup open.
+    combined status ``state`` is not used, since it reads ``pending`` for a commit
+    with no statuses.
     """
-    # The endpoint defaults to filter=latest, which can drop a same-named run from
-    # another suite before _latest_runs sees it. Ask for every run and keep the
-    # newest per suite and name here instead.
+    # The endpoint defaults to filter=latest, which drops same-named runs from
+    # other suites. This requests filter=all and keeps the newest run per suite
+    # and name in _latest_runs.
     runs = gh_runner.rest_pages(
         f"repos/{slug}/commits/{sha}/check-runs",
         items_key="check_runs",

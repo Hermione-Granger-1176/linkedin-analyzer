@@ -63,8 +63,7 @@ export function createWorkerHarness() {
         }
 
         emit(type, event) {
-            // Copied first: a listener that detaches itself while this runs
-            // must not shorten the list being walked.
+            // Iterates over a copy, so listeners may remove themselves during dispatch.
             for (const callback of [...(this.listeners.get(type) || [])]) {
                 callback(event);
             }

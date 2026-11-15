@@ -112,8 +112,7 @@ describe("parseMessagesForExport", () => {
 
         expect(result.success).toBe(false);
         expect(result.rows).toEqual([]);
-        // The specific message, not merely a truthy one: the sibling test above
-        // pins its own, and a leaked echo of the input would still be truthy.
+        // Checks the exact message, so an echoed input would fail.
         expect(result.error).toBe("CSV file is empty or has no data rows");
     });
 });

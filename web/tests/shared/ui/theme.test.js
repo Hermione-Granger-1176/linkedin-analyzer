@@ -26,8 +26,7 @@ describe("Theme", () => {
         Theme.init();
 
         expect(onChange).toHaveBeenCalledTimes(1);
-        // The flag is how a listener tells the boot announcement apart from a
-        // visitor reaching for the switch.
+        // The boot flag marks the init announcement. A click on the switch sends boot: false.
         expect(onChange.mock.calls[0][0].detail).toEqual({ boot: true });
         expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
         document.removeEventListener("themechange", onChange);

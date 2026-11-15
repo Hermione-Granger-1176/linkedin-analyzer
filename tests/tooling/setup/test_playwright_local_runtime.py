@@ -174,14 +174,14 @@ def test_validate_extracted_root_rejects_host_libc_and_escaping_symlinks(tmp_pat
     escaped_link.parent.mkdir(parents=True)
     escaped_link.symlink_to(tmp_path / "outside")
 
-    # The symlink check refuses this, not the path-containment check above it:
-    # the link is absolute, which is refused whether or not it resolves.
+    # The symlink check refuses this link. An absolute link is refused whether or
+    # not it resolves.
     with pytest.raises(runtime.RuntimeSetupError, match="symlink that escapes"):
         runtime.validate_extracted_root(symlink_root)
 
 
 def test_validate_extracted_root_rejects_usr_lib64_host_overlay(tmp_path: Path) -> None:
-    """Guard usr/lib64 loader and libc overlays that runtime discovery would trust."""
+    """Rejects usr/lib64 loader and libc overlays."""
     loader_root = tmp_path / "loader-root"
     loader = loader_root / "usr" / "lib64" / "ld-linux-x86-64.so.2"
     loader.parent.mkdir(parents=True)
@@ -234,7 +234,7 @@ def test_browser_cache_ready_accepts_a_symlinked_shared_cache(tmp_path: Path) ->
 
 
 def test_cache_root_refuses_dangling_symlink(tmp_path: Path) -> None:
-    """Reject a broken symlink root that exists() would silently skip."""
+    """Reject a dangling symlink root."""
     (tmp_path / ".playwright").symlink_to(tmp_path / "missing", target_is_directory=True)
 
     with pytest.raises(runtime.RuntimeSetupError, match="not a symlink"):
@@ -435,7 +435,7 @@ def test_prepare_reports_the_setup_error_not_a_staging_cleanup_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A staging cleanup problem must not mask the setup error being unwound."""
+    """A staging cleanup error does not replace the setup error."""
     paths = _ready_paths(tmp_path)
 
     def explode(_paths: runtime.RuntimePaths, _stage: Path) -> runtime.CacheManifest:
@@ -480,7 +480,7 @@ def test_patch_webkit_launchers_preserves_inherited_private_libraries(tmp_path: 
 def test_require_ready_reports_an_unprepared_cache_before_extraction_details(
     tmp_path: Path,
 ) -> None:
-    """An untouched repository is told to run setup, not handed an extraction error."""
+    """An unprepared cache reports that setup is needed."""
     unprepared = runtime.RuntimePaths.from_repo(tmp_path / "untouched")
 
     with pytest.raises(
@@ -501,7 +501,7 @@ def test_require_ready_reports_an_unprepared_cache_before_extraction_details(
 
 
 def test_require_ready_keeps_its_guards_ahead_of_the_unprepared_report(tmp_path: Path) -> None:
-    """A forged cache root is still rejected before any not-prepared shortcut."""
+    """A symlinked cache root is rejected before the not-prepared check."""
     outside = tmp_path / "outside"
     outside.mkdir()
     (tmp_path / ".playwright").symlink_to(outside, target_is_directory=True)
@@ -510,7 +510,7 @@ def test_require_ready_keeps_its_guards_ahead_of_the_unprepared_report(tmp_path:
         runtime.require_ready(runtime.RuntimePaths.from_repo(tmp_path))
 
 
-# ─── Dependency dry-run parsing ──────────────────────────────────────────────
+# Dependency dry-run parsing
 
 
 def test_parse_dependency_seeds_accepts_a_satisfied_host() -> None:
@@ -556,11 +556,11 @@ def test_parse_dependency_seeds_stops_at_the_end_of_the_indented_block() -> None
     assert runtime.parse_dependency_seeds(output) == ("libnss3",)
 
 
-# ─── APT simulation parsing ──────────────────────────────────────────────────
+# APT simulation parsing
 
 
 def test_parse_simulated_packages_rejects_conflicting_versions() -> None:
-    """Two different versions for one package mean the solver output is unusable."""
+    """Two versions of one package are rejected."""
     output = "Inst libdemo0 (1.0 Ubuntu [amd64])\nInst libdemo0 (2.0 Ubuntu [amd64])\n"
 
     with pytest.raises(runtime.RuntimeSetupError, match="conflicting package versions"):
@@ -606,7 +606,7 @@ def test_resolve_packages_uses_the_non_mutating_simulation(
     assert f"Dir::Cache={tmp_path / 'apt-cache'}" in commands[0]
 
 
-# ─── Host platform detection ─────────────────────────────────────────────────
+# Host platform detection
 
 
 def test_current_host_rejects_non_linux_platforms(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -676,7 +676,7 @@ def test_read_os_release_reports_an_unreadable_file(monkeypatch: pytest.MonkeyPa
         runtime.read_os_release()
 
 
-# ─── Repository Playwright discovery ─────────────────────────────────────────
+# Repository Playwright discovery
 
 
 def test_playwright_cli_requires_the_repository_command(tmp_path: Path) -> None:
@@ -759,7 +759,7 @@ def test_dependency_seeds_reports_an_unrunnable_cli(tmp_path: Path) -> None:
         runtime.dependency_seeds(paths)
 
 
-# ─── Fixed-argv command execution ────────────────────────────────────────────
+# Fixed-argv command execution
 
 
 def test_checked_run_returns_the_captured_output() -> None:
@@ -788,7 +788,7 @@ def test_checked_run_reports_failures_with_bounded_output() -> None:
         runtime.checked_run([sys.executable, "-c", "raise SystemExit(4)"])
 
 
-# ─── Download, extraction, and validation ────────────────────────────────────
+# Download, extraction, and validation
 
 
 def test_download_and_extract_accepts_an_already_satisfied_host(tmp_path: Path) -> None:
@@ -826,7 +826,7 @@ def test_download_and_extract_rejects_an_unsafe_archive_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A symlinked archive could redirect extraction input outside staging."""
+    """A symlinked archive is refused."""
 
     def fake_checked_run(
         command: Sequence[str],
@@ -854,7 +854,7 @@ def test_download_and_extract_requires_empty_archive_staging(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Anything left beside the archives means the staging area is not trustworthy."""
+    """Extra files in the staging area are refused."""
 
     def fake_checked_run(
         command: Sequence[str],
@@ -902,8 +902,7 @@ def test_validate_extracted_root_accepts_relative_links_and_plain_files(tmp_path
 
     runtime.validate_extracted_root(root)
 
-    # Validation is a read-only guard: it accepts the tree by not raising, and
-    # must leave the relative link pointing where it found it.
+    # Validation does not modify the tree. The relative link is unchanged.
     assert (library_dir / "link.so").readlink() == Path("real.so")
 
 
@@ -916,12 +915,9 @@ def test_validate_extracted_root_requires_an_extracted_tree(tmp_path: Path) -> N
 def test_validate_extracted_root_accepts_a_dangling_link_that_stays_inside(
     tmp_path: Path,
 ) -> None:
-    """A link to a sibling APT never downloaded dangles inside the root, and is fine.
+    """A dangling link whose target stays inside the root is accepted.
 
-    APT does not download a package the host already has installed, so the
-    documentation link naming that sibling has nothing to point at. The link is
-    still contained: refusing it failed the whole extraction over a file the
-    runtime never reads.
+    The target is a package APT did not download, and the runtime never reads it.
     """
     root = tmp_path / "root"
     docs = root / "usr" / "share" / "doc"
@@ -931,7 +927,7 @@ def test_validate_extracted_root_accepts_a_dangling_link_that_stays_inside(
 
     runtime.validate_extracted_root(root)
 
-    # Read-only guard: the links are accepted where they are, not repaired.
+    # Validation leaves the dangling links in place.
     assert (docs / "libgomp1").readlink() == Path("gcc-16-base")
     assert not (docs / "libgomp1").exists()
 
@@ -948,7 +944,7 @@ def test_validate_extracted_root_rejects_a_dangling_link_that_escapes(tmp_path: 
 
 
 def test_validate_extracted_root_rejects_a_symlink_loop(tmp_path: Path) -> None:
-    """A link chain that cannot resolve fails closed rather than being walked."""
+    """A symlink loop raises RuntimeSetupError."""
     root = tmp_path / "root"
     library_dir = root / "usr" / "lib"
     library_dir.mkdir(parents=True)
@@ -974,13 +970,7 @@ def test_validate_extracted_root_refuses_an_entry_whose_location_cannot_be_resol
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Containment of the entry itself still fails closed on a resolution error.
-
-    Traversal alone cannot produce an escaped location, because rglob does not
-    descend through directory symlinks. The guard exists for the case where the
-    operating system refuses to answer, which must be refused rather than
-    treated as contained.
-    """
+    """A resolution error on an entry raises RuntimeSetupError rather than counting as contained."""
     root = tmp_path / "root"
     library_dir = root / "usr" / "lib"
     library_dir.mkdir(parents=True)
@@ -1011,11 +1001,11 @@ def test_validate_extracted_root_names_the_entry_it_refuses(tmp_path: Path) -> N
         runtime.validate_extracted_root(root)
 
 
-# ─── Cache identity and reuse ────────────────────────────────────────────────
+# Cache identity and reuse
 
 
 def test_cache_matches_rejects_a_symlinked_library_cache(tmp_path: Path) -> None:
-    """A redirected library cache is never treated as a reusable hit."""
+    """A symlinked library cache is not reused."""
     paths = _ready_paths(tmp_path)
     real_root = tmp_path / "real-root"
     paths.extracted_root.rename(real_root)
@@ -1063,11 +1053,11 @@ def test_regular_file_rejects_unstattable_paths() -> None:
     assert not runtime.regular_file(Path("a" * 5000))
 
 
-# ─── Cache roots, locking, and staging ───────────────────────────────────────
+# Cache roots, locking, and staging
 
 
 def test_cache_root_must_sit_directly_below_the_repository(tmp_path: Path) -> None:
-    """Never create the cache anywhere but the repository's own ignored directory."""
+    """The cache root must be a direct child of the repository root."""
     paths = runtime.RuntimePaths.from_repo(tmp_path)
     escaped = dataclasses.replace(paths, cache_root=tmp_path / "nested" / ".playwright")
 
@@ -1107,7 +1097,7 @@ def test_cache_lock_reports_a_failed_lock(
 
 
 def test_remove_stale_staging_rejects_a_forged_stage_symlink(tmp_path: Path) -> None:
-    """Never follow a planted staging symlink into an unrelated directory."""
+    """A staging symlink is refused rather than followed."""
     paths = runtime.RuntimePaths.from_repo(tmp_path)
     runtime.ensure_cache_root(paths)
     outside = tmp_path / "outside"
@@ -1118,7 +1108,7 @@ def test_remove_stale_staging_rejects_a_forged_stage_symlink(tmp_path: Path) -> 
         runtime.remove_stale_staging(paths)
 
 
-# ─── Atomic publication ──────────────────────────────────────────────────────
+# Atomic publication
 
 
 def test_publish_local_libraries_installs_a_first_cache(tmp_path: Path) -> None:
@@ -1152,7 +1142,7 @@ def test_publish_local_libraries_swaps_an_existing_cache(tmp_path: Path) -> None
 
 
 def test_publish_local_libraries_refuses_staging_outside_the_cache(tmp_path: Path) -> None:
-    """Never publish from a staging directory outside the repository cache."""
+    """Staging outside the repository cache is refused."""
     paths = runtime.RuntimePaths.from_repo(tmp_path)
     runtime.ensure_cache_root(paths)
     outside = tmp_path / "outside-stage"
@@ -1201,7 +1191,7 @@ def test_exchange_directories_requires_renameat2(monkeypatch: pytest.MonkeyPatch
         runtime.exchange_directories(Path("left"), Path("right"))
 
 
-# ─── Preparation ─────────────────────────────────────────────────────────────
+# Preparation
 
 
 def test_prepare_reuses_a_current_cache(
@@ -1255,7 +1245,7 @@ def test_prepare_tolerates_staging_already_removed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A step that cleans up its own staging must not break the outer cleanup."""
+    """Staging removed during a failed step does not break the outer cleanup."""
     paths = _ready_paths(tmp_path)
 
     def remove_stage_and_fail(_paths: runtime.RuntimePaths, stage: Path) -> runtime.CacheManifest:
@@ -1293,7 +1283,7 @@ def test_expected_manifest_records_every_invalidating_input(
     assert manifest.packages == (runtime.PackageVersion(name="libdemo0", version="1.0"),)
 
 
-# ─── Runtime environment construction ────────────────────────────────────────
+# Runtime environment construction
 
 
 def test_runtime_environment_inherits_the_process_environment(tmp_path: Path) -> None:
@@ -1351,11 +1341,11 @@ def test_browser_root_falls_back_to_the_account_home(monkeypatch: pytest.MonkeyP
     assert runtime.default_shared_browser_root() == Path.home() / ".cache" / "ms-playwright"
 
 
-# ─── Readiness gating ────────────────────────────────────────────────────────
+# Readiness gating
 
 
 def test_browser_cache_ready_requires_a_browser_root(tmp_path: Path) -> None:
-    """A missing shared browser cache is never treated as prepared."""
+    """A missing shared browser cache is not ready."""
     paths = runtime.RuntimePaths.from_repo(tmp_path, browser_root=tmp_path / "missing")
 
     assert not runtime.browser_cache_ready(paths)
@@ -1419,11 +1409,11 @@ def test_require_ready_rejects_missing_browsers(tmp_path: Path) -> None:
         runtime.require_ready(paths)
 
 
-# ─── WebKit launcher patching ────────────────────────────────────────────────
+# WebKit launcher patching
 
 
 def test_patch_webkit_launchers_rejects_an_unexpected_format(tmp_path: Path) -> None:
-    """Never rewrite a launcher whose library-path line is not the known one."""
+    """A launcher with an unknown library-path line is not rewritten."""
     paths = runtime.RuntimePaths.from_repo(tmp_path, browser_root=tmp_path / "shared-browsers")
     launcher = _write_webkit_launcher(paths, patched=False)
     launcher.write_text("#!/bin/sh\nexec MiniBrowser\n", encoding="utf-8")
@@ -1457,7 +1447,7 @@ def test_webkit_launcher_is_patched_handles_unreadable_launchers(tmp_path: Path)
     assert not runtime.webkit_launcher_is_patched(tmp_path)
 
 
-# ─── Wrapped execution ───────────────────────────────────────────────────────
+# Wrapped execution
 
 
 def test_run_in_runtime_reports_a_signalled_child(tmp_path: Path) -> None:
@@ -1515,7 +1505,7 @@ def test_probe_launches_every_engine_through_node(
         assert engine in seen[0][2]
 
 
-# ─── Status and cleanup ──────────────────────────────────────────────────────
+# Status and cleanup
 
 
 def test_status_reports_a_prepared_runtime(
@@ -1546,7 +1536,7 @@ def test_status_reports_an_unprepared_runtime(
 
 
 def test_clean_is_idempotent(tmp_path: Path) -> None:
-    """Repeated cleaning succeeds and leaves no cache, so the Make target can rerun."""
+    """Repeated cleaning succeeds and leaves no cache."""
     paths = runtime.RuntimePaths.from_repo(tmp_path)
     paths.cache_root.mkdir(parents=True)
     (paths.cache_root / "leftover").write_text("", encoding="utf-8")
@@ -1667,7 +1657,7 @@ def test_is_within_fails_closed_for_inaccessible_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Operating-system resolution errors cannot bypass containment."""
+    """A resolution error means the path is not within the root."""
     original_resolve = Path.resolve
     inaccessible = tmp_path / "inaccessible"
 

@@ -177,7 +177,7 @@ describe("loadConnectionsData", () => {
     });
 
     it("refuses the main-thread fallback for very large exports", async () => {
-        // Keep parsing above the fallback size limit off the UI thread.
+        // Exports above the fallback size limit are not parsed on the UI thread.
         harness.uninstall();
         const huge = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
 
@@ -186,9 +186,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("still builds on the main thread just under the fallback ceiling", async () => {
-        // The positive control for the test above: same padded shape, only
-        // shorter. Without this, a null there could equally mean the padding
-        // broke the parser, and deleting the size guard would not fail.
+        // Positive control for the test above: same padded shape, under the
+        // ceiling. Without it, a null could mean the padding broke the parser.
         harness.uninstall();
         const padded = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(10)}`;
 
@@ -210,9 +209,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("does not re-parse on the main thread when the worker reports failure", async () => {
-        // The worker has already run this exact CSV through this exact code and
-        // reported that it cannot parse it; the main thread would only freeze
-        // the page to reach the same answer.
+        // The worker already parsed this CSV and reported failure. Parsing again
+        // on the main thread would reach the same answer.
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         replyToRequest({ success: false, error: "bad csv" });
 
@@ -225,8 +223,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // An unknown request id does not establish a parse failure for this file.
-        // Permit the small-file fallback and settle without advancing the timer.
+        // An unknown request id does not count as a parse failure for this file,
+        // so the small-file fallback runs.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         replyToRequest({ success: false, error: "invalid request" }, 99);
@@ -237,9 +235,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("does not re-parse on the main thread for an error envelope under its own id", async () => {
-        // This worker answers a request it threw on with an error envelope under
-        // that request's id. It ran this exact CSV through this exact code, so
-        // the UI thread would only freeze to reach the same answer.
+        // A request that threw gets an error envelope under its own id. The main
+        // thread is not used for it.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         const [request] = harness.instance.postMessage.mock.calls[0];
@@ -280,11 +277,9 @@ describe("loadConnectionsData", () => {
     });
 
     it("answers a crash the same way whichever of its two routes lands first", async () => {
-        // A crash inside this worker reaches the main thread twice over: as the
-        // posted error envelope under id zero, and as a propagated error event
-        // on the Worker object, which this worker does not cancel. Nothing in
-        // the spec orders the two, so what the export does must not depend on
-        // which one wins.
+        // A crash reaches the main thread as an error envelope under id 0 and as
+        // an error event on the Worker object. The two may arrive in either
+        // order, and the outcome must not depend on which arrives first.
         const postCrashEnvelope = (worker) => {
             worker.emit("message", {
                 data: { type: "error", requestId: 0, payload: { message: "runtime failure" } },
@@ -307,7 +302,7 @@ describe("loadConnectionsData", () => {
             outcomes.push(await pending);
         }
 
-        // Both fall back, because neither route said anything about the file.
+        // Both routes fall back to the main thread.
         expect(outcomes.map((data) => data.rows.length)).toEqual([2, 2]);
     });
 
@@ -315,7 +310,7 @@ describe("loadConnectionsData", () => {
         // The parser nulls an analytics payload that is not an object and
         // normalizes a missing row list to an empty array, so a reply can be
         // well-formed enough to accept and still carry nothing to draw. No timer
-        // is advanced here, so leaving it to the watchdog fails the test.
+        // is advanced, so the request must settle from the reply alone.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         replyToRequest({ success: true, analytics: "not an object", rows: WORKER_ROWS });
@@ -362,10 +357,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("drops a stale reply before reading it, so an empty one cannot settle the live request", async () => {
-        // The id is checked ahead of the parse, as it is in the messages and
-        // threads transports. Read the other way round, a stale reply the parser
-        // has to empty out settles the request that is still waiting, which then
-        // answers from the main thread instead of from the worker.
+        // The id is checked before the parse, as in the messages and threads
+        // transports. A stale reply cannot settle the live request.
         const pending = loadConnectionsData(CONNECTIONS_CSV);
 
         replyToRequest({ success: true, analytics: null, rows: [] }, 99);
@@ -389,9 +382,8 @@ describe("loadConnectionsData", () => {
     it("cancels a worker error event so the browser cannot report it", async () => {
         const preventDefault = vi.fn();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
-        // An uncancelled error event on a Worker is reported by the browser
-        // itself, and that report reaches the console with the worker's own
-        // message - here, text parsed straight out of the connections CSV.
+        // An uncancelled error event is logged by the browser, with the worker's
+        // message. Here that message could hold text from the connections CSV.
         harness.instance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
         await pending;
 
@@ -413,9 +405,9 @@ describe("loadConnectionsData", () => {
     });
 
     it("scales the watchdog with the size of the export", async () => {
-        // 30s base plus 5s per whole megabyte, the same budget the messages
-        // parse is given. The timeout test above advances 30s against a
-        // six-line CSV, so it would pass for a constant.
+        // 30s base plus 5s per whole megabyte, as for the messages parse. A
+        // timeout on a six-line CSV cannot tell a constant from a scaled budget,
+        // so this test uses a size that crosses the base.
         vi.useFakeTimers();
         const threeMb = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);
@@ -463,9 +455,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("ends an earlier request rather than letting two share the worker", async () => {
-        // Both requests would otherwise own the same module-level watchdog and
-        // settle hook, and whichever the worker answered first would clear the
-        // other's, leaving that promise pending for the life of the page.
+        // A new request ends the earlier one, so the two never share the
+        // module-level watchdog and settle hook.
         const first = loadConnectionsData(CONNECTIONS_CSV);
         const worker = harness.instance;
         const second = loadConnectionsData(CONNECTIONS_CSV);
@@ -479,8 +470,7 @@ describe("loadConnectionsData", () => {
             },
         });
 
-        // The cancelled one resolves rather than hanging, and does not re-run
-        // the abandoned work on the UI thread.
+        // The cancelled request resolves to null and does not run on the UI thread.
         expect(await first).toBeNull();
         expect((await second).rows).toHaveLength(1);
     });
@@ -492,10 +482,8 @@ describe("loadConnectionsData", () => {
         expect(worker.postMessage).toHaveBeenCalled();
 
         terminateConnectionsWorker();
-        // No timer is advanced and no event is emitted: terminating removed
-        // every one of them, so cancellation alone has to end the request. Left
-        // pending, its frame keeps the raw connections CSV alive for the life of
-        // the page.
+        // No timer is advanced and no event is emitted. Termination removes every
+        // listener, so cancelling alone settles the request.
         expect(await pending).toBeNull();
         expect(vi.getTimerCount()).toBe(0);
         expect(captureError).not.toHaveBeenCalled();
@@ -556,8 +544,7 @@ describe("loadConnectionsData", () => {
     });
 
     it("never reports the message a worker error envelope carried", async () => {
-        // The worker normalizes whatever it caught into that message, so it can
-        // carry a row of the user's own connections.
+        // Only fixed text is reported.
         const thrown = piiError("worker-envelope");
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         harness.instance.emit("message", {

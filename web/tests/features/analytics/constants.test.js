@@ -1,8 +1,5 @@
 /**
  * Vitest unit tests for the shared analytics label constants.
- *
- * These arrays were extracted into their own module to break an import cycle
- * between the analytics engine and its date/insight helpers.
  */
 
 import { describe, expect, it } from "vitest";

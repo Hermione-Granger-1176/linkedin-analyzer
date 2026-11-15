@@ -28,7 +28,7 @@ describe("DomEvents.closest", () => {
     });
 
     it("returns null when target is a non-Element node such as a Text node", () => {
-        // Text nodes are not instanceof Element, so the guard must return null
+        // A Text node is not an Element, so the result is null.
         const textNode = document.createTextNode("hello");
         const match = DomEvents.closest({ target: textNode }, ".target");
         expect(match).toBeNull();

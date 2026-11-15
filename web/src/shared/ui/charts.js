@@ -138,9 +138,9 @@ export const SketchCharts = (() => {
         }
         const ratio = exportDpr || window.devicePixelRatio || 1;
         // Round the CSS box first, then scale the backing store to whole device
-        // pixels. A fractional backing store (rect.width is often sub-pixel) makes
-        // the browser resample the canvas, which reads as blur on wide charts.
-        // Entrance transforms change the bounding rectangle, not the layout box.
+        // pixels. A fractional backing store makes the browser resample the canvas.
+        // Layout size comes from clientWidth and clientHeight, which entrance
+        // transforms do not change.
         const cssWidth = canvas.clientWidth || Math.round(rect.width);
         const cssHeight = canvas.clientHeight || Math.round(rect.height);
         canvas.width = Math.round(cssWidth * ratio);
@@ -180,8 +180,7 @@ export const SketchCharts = (() => {
      */
     function drawEmptyState(canvas, message) {
         setChartEmpty(canvas, true);
-        // The redraw lets exportPng (and any other drawRegistry consumer)
-        // reproduce the empty-state message; clear() dropped the previous handle.
+        // Registers the redraw so exportPng can reproduce the empty-state message.
         const chart = beginChart(canvas, () => drawEmptyState(canvas, message));
         /* v8 ignore next 3 */
         if (!chart) {
@@ -196,8 +195,7 @@ export const SketchCharts = (() => {
     }
 
     /**
-     * Pick a "nice" chart maximum with headroom so sparse or flat data still
-     * reads as a chart instead of a full-height block pinned to the top edge.
+     * Pick a "nice" chart maximum with headroom above the data.
      * @param {number} value - The raw maximum data value.
      * @returns {number} A rounded maximum with a little headroom above the data.
      */
@@ -296,7 +294,7 @@ export const SketchCharts = (() => {
     }
 
     /**
-     * Draw a sketchy rectangle border (cheaper than RoughJS for many items).
+     * Draw a sketchy rectangle border with jittered corners.
      * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
      * @param {number} x - The x coordinate of the rectangle.
      * @param {number} y - The y coordinate of the rectangle.
@@ -351,7 +349,7 @@ export const SketchCharts = (() => {
         ctx.lineTo(padding.left + chartWidth, baseY + 2);
         ctx.stroke();
 
-        // Y-axis ticks and gridlines so sparse/flat data still reads as a chart
+        // Y-axis ticks and gridlines
         const tickStep = Math.max(1, Math.ceil(maxValue / 4));
         ctx.font = "10px Patrick Hand, sans-serif";
         ctx.textAlign = "right";
@@ -445,7 +443,7 @@ export const SketchCharts = (() => {
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         visiblePoints.forEach(({ point, x, y, index }) => {
-            // Flat months emit a row of noisy repeated "0" labels; skip them.
+            // Zero values get no label.
             if (point.value === 0) {
                 return;
             }
@@ -493,9 +491,8 @@ export const SketchCharts = (() => {
         const labelEvery = points.length <= 10 ? 1 : Math.ceil(points.length / 8);
         const minLabelSpacing = 38;
 
-        // Collect label candidates, then thin out any that would crowd their
-        // neighbour so rotated labels (e.g. "Dec"/"Jan") no longer collide at
-        // narrow widths. The last point wins over an adjacent regular label.
+        // Collect label candidates, then drop any that would crowd the previous
+        // label. The last point evicts the previous label instead.
         /** @type {PlacedTimelinePoint[]} */
         const accepted = [];
         points.forEach((entry, index) => {
@@ -736,7 +733,7 @@ export const SketchCharts = (() => {
         /** @type {ChartItem[]} */
         const items = [];
 
-        // Draw cells with fills instead of RoughJS paths.
+        // Cells are drawn as plain fills.
         for (let day = 0; day < 7; day++) {
             const values = grid[day];
             const dayLabel = DAY_LABELS[day];
@@ -779,7 +776,7 @@ export const SketchCharts = (() => {
             ctx.stroke();
         }
 
-        // Single sketchy border (only 1 RoughJS call for entire heatmap)
+        // One RoughJS call draws the border for the whole heatmap.
         rough.canvas(canvas).rectangle(padding.left, padding.top, chartWidth, chartHeight, {
             stroke: colors.border,
             strokeWidth: 1.2,
@@ -828,7 +825,7 @@ export const SketchCharts = (() => {
         /** @type {ChartItem[]} */
         const items = [];
 
-        // Draw segments with canvas instead of a RoughJS object per segment.
+        // Segments are drawn directly on the canvas.
         values.forEach((item) => {
             if (item.value === 0) {
                 return;
@@ -884,7 +881,7 @@ export const SketchCharts = (() => {
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
 
-        // Single RoughJS call for outer circle
+        // One RoughJS call draws the outer circle.
         rough.canvas(canvas).circle(centerX, centerY, radius * 2, {
             stroke: colors.border,
             strokeWidth: 1.2,

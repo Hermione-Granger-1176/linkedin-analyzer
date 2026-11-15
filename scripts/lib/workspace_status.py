@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Report workspace health for ``make status``.
 
-Use the standard library so the command works before environment setup.
-Check tool availability before invoking Git, uv, npm, or the PR helper.
+Uses only the standard library, so it runs before environment setup.
+Checks tool availability before invoking Git, uv, npm, or the PR helper.
 Report Git state, Python and Node dependencies and locks, the web build,
 and the current pull request.
 """
@@ -20,7 +20,7 @@ from typing import TextIO
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # A runner takes a command vector plus a working directory and optional env, and
-# returns the completed process. Injectable so tests never touch real tooling.
+# returns the completed process. Tests pass a fake runner.
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
@@ -50,8 +50,7 @@ def _succeeds(
 ) -> subprocess.CompletedProcess[str] | None:
     """Return the completed process, or None if the tool cannot launch.
 
-    Catch OSError so missing, non-executable, or invalid executables become status
-    results rather than exceptions that stop the workspace report.
+    An OSError (missing, non-executable, or invalid executable) returns None.
     """
     try:
         return run_fn(cmd, cwd=cwd, env=env)
@@ -67,9 +66,8 @@ def _ok(result: subprocess.CompletedProcess[str] | None) -> bool:
 def _child_env(root: Path) -> dict[str, str]:
     """Return the child environment with the repository root on the import path.
 
-    Prepends rather than replaces. A developer may have set ``PYTHONPATH`` for
-    their own tooling, and this only needs the repository root importable so
-    ``python -m scripts.gh.cli`` resolves.
+    The root is prepended to any inherited ``PYTHONPATH`` rather than replacing it,
+    so ``python -m scripts.gh.cli`` resolves.
     """
     inherited = os.environ.get("PYTHONPATH", "")
     entries = [str(root), *(entry for entry in inherited.split(os.pathsep) if entry)]
@@ -92,9 +90,7 @@ def _write_git_section(out: TextIO, *, root: Path, run_fn: Runner) -> None:
     _emit(out, "=== Git ===")
     git = _succeeds(["git", "status", "-sb"], cwd=root, run_fn=run_fn)
     if git is None:
-        # A launch failure must not fail the target, but printing the section
-        # header and nothing else is the least actionable thing a health report
-        # can do on the workstation it exists to diagnose.
+        # A launch failure is reported as a status line and does not fail the target.
         _emit(out, "UNAVAILABLE: git could not be launched")
     else:
         out.write(git.stdout)

@@ -28,10 +28,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Resolve the repo root from this module's location so a direct script run is
-// independent of the caller's working directory. Under Vitest the module is
-// imported with a non-file import.meta.url, so fall back to the process cwd;
-// tests always pass explicit directories and the Makefile runs from the root.
+// Resolves the repo root from this module's location. Under Vitest, where
+// import.meta.url is not a file URL, the process cwd is used. Tests pass explicit
+// directories, and the Makefile runs from the root.
 function resolveRepoRoot() {
     try {
         return fileURLToPath(new URL("../..", import.meta.url));

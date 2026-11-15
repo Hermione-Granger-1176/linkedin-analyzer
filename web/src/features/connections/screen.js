@@ -276,10 +276,9 @@ export const ConnectionsPage = (() => {
     function requestParse(worker, blob) {
         const id = ++requestId;
         pendingRequestId = id;
-        // Scaled to the file like every other raw-CSV parse: a fixed 30
-        // seconds cut a large export off while the worker was still on it.
+        // The timeout scales with the file size, as for other raw-CSV parses.
         workers.watch(computeWorkerTimeout(blob), () => {
-            // A response clears this timeout. Keep the check for a stale callback.
+            // Ignores a callback from an earlier request.
             /* v8 ignore next 3 */
             if (pendingRequestId !== id) {
                 return;
@@ -307,8 +306,8 @@ export const ConnectionsPage = (() => {
             const worker = workers.ensure();
 
             const file = await loadConnectionsFile();
-            // The worker may have been replaced or stopped while storage was
-            // read; a newer load owns it now, so this one steps aside.
+            // Returns if the worker was replaced or stopped while storage was read.
+            // A newer load owns the worker then.
             if (workers.current() !== worker) {
                 return;
             }
@@ -353,9 +352,9 @@ export const ConnectionsPage = (() => {
         // The cache holds metadata only. Load the stored Blob for parsing.
         const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
         if (file && !file.blob) {
-            // Metadata exists but the upload is missing, for example after a
-            // clear in another tab or a persistence failure. Throw so the caller
-            // shows the storage-error UI instead of the "not uploaded" state.
+            // Metadata exists without a Blob, for example after a clear in another
+            // tab or a persistence failure. Throws so the caller shows the
+            // storage-error state.
             throw new Error("Stored connections file record is missing.");
         }
         if (file) {

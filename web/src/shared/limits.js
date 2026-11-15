@@ -5,9 +5,8 @@ const MIB = 1024 * 1024;
 /** @typedef {{maxFileBytes: number, maxCsvChars: number, maxCsvRows: number}} UploadLimits */
 
 /**
- * The limits every production build enforces. Decoded text never has more
- * characters than the file has bytes, so the character limit matches the byte
- * limit rather than adding a second, earlier cut-off.
+ * The limits every production build enforces. Decoded text has no more
+ * characters than the file has bytes, so the character limit equals the byte limit.
  */
 export const PUBLIC_LIMITS = Object.freeze({
     maxFileBytes: 128 * MIB,
@@ -16,8 +15,8 @@ export const PUBLIC_LIMITS = Object.freeze({
 });
 
 /**
- * Limits for measuring large exports in development and test builds. They match
- * the public limits today; raise them here to measure beyond those first.
+ * Limits for measuring large exports in development and test builds. They
+ * currently equal the public limits. Raise them here to measure beyond those.
  */
 export const MEASUREMENT_LIMITS = Object.freeze({
     maxFileBytes: 128 * MIB,
@@ -52,23 +51,20 @@ export const MAX_CSV_ROWS = LIMITS.maxCsvRows;
 
 /**
  * Largest file the Clean screen cleans on the main thread when its worker
- * cannot start. This keeps the limit from before the public limits rose:
- * a page-thread clean of a larger file can freeze or crash the tab.
+ * cannot start. A page-thread clean of a larger file can freeze or crash the tab.
  */
 export const MAIN_THREAD_MAX_FILE_BYTES = 80 * MIB;
 
 /**
  * Largest messages file the PDF export takes message contents from. Above it
- * the bodies cannot be held alongside the analysis within the memory budget,
- * so the export is refused with a reason and the rest can be exported without
- * them.
+ * the export is refused with a reason, and the rest of the export can proceed
+ * without the message bodies.
  */
 export const THREADS_EXPORT_MAX_BYTES = 60 * MIB;
 
 /**
- * Above this many characters, cleaning on the UI thread could freeze the page,
- * so a failed worker read falls back to an empty state instead. One limit for
- * every main-thread fallback, because they all block the same thread.
+ * Above this many characters, a failed worker read shows an empty state instead
+ * of cleaning on the UI thread. Shared by every main-thread fallback.
  */
 export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * MIB;
 

@@ -24,20 +24,18 @@ from scripts.ci.workflow_helpers import report_checked
 from scripts.gh import gh_runner
 from scripts.gh.gh_runner import GhError
 
-# Exit codes, matching ``scripts.ci.schedule_watchdog`` so a caller can tell
-# "the audit ran and found drift" apart from "the audit could not look". Note
-# that ``make`` collapses every non-zero recipe exit to 2, so the distinction
-# survives only for a caller running this module directly.
+# Exit codes match ``scripts.ci.schedule_watchdog``. ``make`` collapses every
+# non-zero recipe exit to 2, so the distinction holds only when this module runs
+# directly.
 EXIT_HEALTHY = 0
 EXIT_DRIFT_FOUND = 1
 EXIT_CHECK_FAILED = 2
 
-# Every check that must pass before a pull request can merge into main. The
-# `CI result` aggregate already covers every job inside the CI workflow, so
-# naming those individually would only break protection the day one is renamed.
-# What it cannot speak for is named here instead: the two CodeQL analysis jobs,
-# the code-scanning service's own `CodeQL` alert gate, and the dependency
-# review, each of which lives in a workflow of its own.
+# Checks that must pass before a pull request can merge into main. The `CI result`
+# aggregate covers every job in the CI workflow, so those jobs are not listed
+# individually. The checks listed here live in other workflows or in the
+# code-scanning service: the two CodeQL analysis jobs, the `CodeQL` alert gate, and
+# the dependency review.
 EXPECTED_REQUIRED_CHECKS = frozenset(
     {
         "analyze-javascript",
@@ -49,20 +47,17 @@ EXPECTED_REQUIRED_CHECKS = frozenset(
 )
 
 # The three GitHub Apps: the primary app that commits, the escalation app that
-# opens the CI pin refresh pull request, and the audit app that runs this check
-# on a schedule. All six values are audited because any one missing degrades a
-# workflow into a skip, and a skip is quiet. The audit app's own pair is here
-# too, so this check cannot go silently unrun.
+# opens the CI pin refresh pull request, and the audit app that runs this check on
+# a schedule. All six values are audited, since a missing value turns a workflow
+# step into a quiet skip. The audit app's own pair is included.
 EXPECTED_VARIABLES = frozenset({"APP_ID", "ESCALATION_APP_ID", "AUDIT_APP_ID"})
 EXPECTED_SECRETS = frozenset(
     {"APP_PRIVATE_KEY", "ESCALATION_APP_PRIVATE_KEY", "AUDIT_APP_PRIVATE_KEY"}
 )
 
-# Secret scanning is the layer no job in this repository can provide: push
-# protection refuses the push carrying a secret, rather than reporting it once
-# it is already in history and the credential has to be rotated regardless.
-# Dependabot security updates sit here for the same reason, being the only
-# automation that opens a fix for a newly disclosed advisory without a human.
+# Platform features that no job in this repository provides. Push protection
+# refuses a push that carries a secret. Dependabot security updates open fixes for
+# newly disclosed advisories.
 EXPECTED_SECURITY_FEATURES = frozenset(
     {
         "dependabot_security_updates",
@@ -107,31 +102,25 @@ REQUIRED_PROTECTION_BLOCKS = {
     "required_conversation_resolution": "does not require conversation resolution",
 }
 
-# Branch protection blocks that must report ``enabled: false``. These two are
-# the ones that let history be rewritten or removed outright, which no other
-# setting here can compensate for.
+# Branch protection blocks that must report ``enabled: false``. These two allow
+# history to be rewritten or removed.
 FORBIDDEN_PROTECTION_BLOCKS = {
     "allow_force_pushes": "allows force pushes",
     "allow_deletions": "allows branch deletion",
 }
 
-# Every repository field this audit judges by value. Presence is checked before
-# any of them is compared, because an omitted field and a `false` one are the
-# same thing to `dict.get` and only one of them is drift.
+# Repository fields judged by value. Presence is checked before comparison, since
+# an omitted field and a `false` one are indistinguishable through `dict.get`.
 #
-# The merge methods and `delete_branch_on_merge` are deliberately absent. GitHub
-# returns those only to a token carrying push access, which is an access level
-# rather than a grantable permission, so the read-only audit App sees `null` for
-# every one of them and no permission change can alter that. Auditing them would
-# mean giving the App write access to read four booleans. Required linear
-# history on the default branch already refuses merge and rebase commits, and
-# the audit does check that.
+# The merge methods and `delete_branch_on_merge` are not audited. GitHub returns
+# them only to tokens with push access, which the read-only audit App lacks.
+# Required linear history on the default branch already refuses merge and rebase
+# commits.
 JUDGED_REPOSITORY_FIELDS = frozenset({"default_branch"})
 
-# What `gh api` says when a branch exists but carries no protection, as opposed
-# to "Branch not found" for one that does not exist. Both are HTTP 404, so the
-# status alone cannot separate them and only this phrase can: a mistyped
-# `branch=` must fail closed rather than be reported as removed protection.
+# Message `gh api` returns when a branch exists without protection. A missing
+# branch also returns HTTP 404, so only this phrase tells the two apart. Any other
+# 404 fails closed.
 BRANCH_UNPROTECTED_MARKER = "branch not protected"
 
 
@@ -382,9 +371,8 @@ def extract_ruleset_rule_types(payload: object) -> set[str]:
 def enabled_security_features(repository: dict[str, object]) -> set[str]:
     """Return the ``security_and_analysis`` features reported as enabled.
 
-    The block is absent entirely for a caller without administration access,
-    which reads the same as every feature being off. That is the safe direction:
-    the audit reports drift rather than certifying a setting it could not see.
+    An absent block (no administration access) reads as every feature being off,
+    so the audit reports drift rather than certifying settings it cannot see.
     """
     raw = repository.get("security_and_analysis")
     if not isinstance(raw, dict):
@@ -399,10 +387,9 @@ def enabled_security_features(repository: dict[str, object]) -> set[str]:
 def extract_required_checks(protection: dict[str, object]) -> set[str]:
     """Return the required status check names from a branch protection payload.
 
-    Read names from both the ``contexts`` list and the ``context`` fields in
-    the ``checks`` list. Ignore either field if it is not a list, while keeping
-    valid names from the other field. This avoids treating dictionary keys as
-    required check names.
+    Names come from both the ``contexts`` list and the ``context`` fields in the
+    ``checks`` list. A field that is not a list is ignored, and valid names from
+    the other field are kept.
 
     Return an empty set if ``required_status_checks`` is missing or is not a
     dictionary. The caller then reports every expected check as missing.
@@ -491,10 +478,9 @@ def _audit_pypi_deployment_refs(
 ) -> list[str]:
     """Audit which refs may deploy to the PyPI environment.
 
-    A null policy means every branch and tag can reach the environment, which
-    lets a release cut from an unexpected ref request publishing credentials.
-    The protected-branches option is the opposite failure: it admits no tags at
-    all, so releases stop at the gate instead of passing through it.
+    A null policy lets every branch and tag deploy to the environment. The
+    protected-branches option admits no tags, so releases cannot reach the
+    environment.
     """
     policy = payload.get("deployment_branch_policy")
     if policy is None:
@@ -585,11 +571,9 @@ def audit_release_tag_rulesets(rulesets: list[dict[str, object]]) -> list[str]:
 def audit_repository(repository: dict[str, object], *, default_branch: str) -> list[str]:
     """Audit the repository-level settings, ignoring branch protection.
 
-    A field the response omitted is a failure to look, not a setting at its
-    wrong value. GitHub returns a reduced repository object to tokens without
-    the access a field needs, and ``dict.get`` cannot tell that apart from a
-    real ``false``, so an absent key would otherwise be reported as drift about
-    a setting that is in fact correct.
+    A field the response omitted is a failure to look, not a wrong value. GitHub
+    omits fields a token cannot read, and ``dict.get`` cannot tell an omitted key
+    from ``false``.
     """
     unreadable = sorted(JUDGED_REPOSITORY_FIELDS - repository.keys())
     if unreadable:
@@ -630,7 +614,7 @@ def audit_protection(protection: dict[str, object] | None, *, default_branch: st
     approvals = None
     if isinstance(reviews, dict):
         approvals = reviews.get("required_approving_review_count")
-    # bool is a subclass of int, so True would otherwise pass as a count of 1.
+    # bool is excluded because it subclasses int.
     if not isinstance(approvals, int) or isinstance(approvals, bool) or approvals < 1:
         findings.append(f"{label} does not require at least 1 approving review")
 

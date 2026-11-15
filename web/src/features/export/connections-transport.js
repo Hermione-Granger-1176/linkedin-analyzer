@@ -1,10 +1,10 @@
 /**
  * Load the PDF connections dashboard through an export-owned worker.
  *
- * Use the Connections screen's worker implementation so parsing and aggregation
- * keep the main thread available for cancellation. worker-transport.js manages
- * the separate worker instance. Report fixed errors because thrown values may
- * contain connection names, employers, or profile URLs.
+ * Parsing and aggregation run in the Connections screen's worker, off the main
+ * thread. worker-transport.js manages the separate worker instance. Reports
+ * fixed error text only: thrown values can contain connection names, employers,
+ * or profile URLs.
  */
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.ts";
@@ -86,10 +86,8 @@ function connectionsRequest(connectionsCsv) {
         envelope: { type: "process", payload: { connectionsCsv } },
         parse: parseConnectionsWorkerMessage,
         interpret: interpretReply,
-        // The same size-scaled budget the messages parse is given, over the one
-        // file this transport holds: a fixed watchdog would fire early on the
-        // large connections export this transport exists for and send the parse
-        // the worker was still doing to the UI thread instead.
+        // Scaled to the file size, like the messages budget, over the one file
+        // this transport holds.
         timeoutMs: computeWorkerTimeout(connectionsCsv),
     };
 }
@@ -102,38 +100,32 @@ function connectionsRequest(connectionsCsv) {
  */
 function interpretReply(message, context) {
     if (message.type === "error") {
-        // This worker answers a request it threw on under that request's own id,
-        // and a global failure or a request it could not read at all under id
-        // zero. It settles the one request in flight either way; which of the
-        // two it is decides what it settles as, per `failureOutcome`.
+        // The worker answers a failed request under its own id, or under id zero
+        // when the request could not be read. Either way it settles the request
+        // in flight. The outcome depends on which, per `failureOutcome`.
         context.report("Connections worker reported an error.", "connections-worker-error-payload");
         return failureOutcome(message, context);
     }
-    // The contract parser normalizes every field of a processed payload and
-    // always hands back an object, so there is nothing to guard before reading
-    // `success`, unlike its messages sibling, which passes the payload through
-    // and nulls one that is not an object.
+    // The contract parser always returns an object for a processed payload, so
+    // `success` is read without a guard.
     if (!message.payload.success) {
-        // Settled whatever id it arrived under, because only one request is ever
-        // in flight and waiting out the watchdog would look like a hang. What it
-        // settles as does turn on the id: see `failureOutcome`.
+        // A failure settles the request in flight whatever id it arrived under.
+        // The outcome depends on the id: see `failureOutcome`.
         context.report("Connections worker reported a failure.", "connections-worker-failure");
         return failureOutcome(message, context);
     }
-    // A stale success belongs to a request nobody is waiting on. It is dropped
-    // before the emptied-payload check below rather than after it, as the
-    // messages transport does: an emptied payload settles this request, and the
-    // reply that settles it has to be its own.
+    // A stale success belongs to a request nobody is waiting on, so it is dropped
+    // before the empty-payload check below. An empty payload settles the request
+    // in flight, so only this request's reply may do that.
     if (message.requestId !== context.requestId) {
         return PENDING;
     }
     const data = toConnectionsData(message.payload);
     if (!data) {
         context.report("Connections worker response carried no data.", "connections-message-parse");
-        // Settled rather than left to the watchdog, for the same reason the
-        // failure envelope above is. Null rather than FAILED, because a reply the
-        // parser had to empty out says nothing about whether the file itself can
-        // be parsed.
+        // Settled here rather than left to the watchdog. Returns null rather than
+        // FAILED: a reply the parser emptied says nothing about whether the file
+        // can be parsed.
         return null;
     }
     return data;
@@ -142,14 +134,12 @@ function interpretReply(message, context) {
 /**
  * Normalize a successful worker payload for the dashboard.
  * The worker returns the cleaned rows used by the Connections screen.
- * Normalize them here so worker and main-thread results have the same shape.
+ * Worker and main-thread results share one shape.
  * @param {import("../../app/worker-contracts.ts").ConnectionsProcessedPayload} payload - Successful worker payload
  * @returns {ConnectionsData|null} Data, or null when the reply holds nothing to draw
  */
 function toConnectionsData(payload) {
-    // The parser nulls an analytics payload that is not a plain object and
-    // normalizes a missing row list to an empty array, so a reply can be
-    // well-formed enough to accept and still carry nothing at all.
+    // A reply can pass the parser and still carry no analytics or rows.
     if (!payload.analytics || !payload.rows.length) {
         return null;
     }
@@ -160,9 +150,8 @@ function toConnectionsData(payload) {
         rows: normalizeConnectionRows(
             /** @type {CleanedConnections["cleanedData"]} */ (payload.rows),
         ),
-        // Neither field inside analytics is validated by the contract, which
-        // checks only that the object is one, so both are taken the way the
-        // Connections screen takes them.
+        // The contract checks only that analytics is an object. Both fields are
+        // read the way the Connections screen reads them.
         timeline: Array.isArray(payload.analytics.growthTimeline)
             ? payload.analytics.growthTimeline
             : [],
@@ -189,8 +178,7 @@ function buildDataOnMainThread(connectionsCsv) {
             stats: computeStats(processed.cleanedData),
         };
     } catch {
-        // The caught value came from parsing the user's own connections, so only
-        // a fixed error crosses into telemetry.
+        // Only a fixed error is reported to telemetry.
         captureError(new Error("Connections could not be parsed for the export."), {
             module: "pdf-export",
             operation: "connections-main-thread-parse",

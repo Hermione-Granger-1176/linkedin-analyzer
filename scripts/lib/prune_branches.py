@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Prune local branches whose content already exists in the base branch.
 
-An ancestry check can miss squash-merged branches because their original commits
-are absent from the base history. Instead, ``git merge-tree --write-tree``
-computes the result of merging each candidate without changing the checkout.
+``git merge-tree --write-tree`` computes the result of merging each candidate
+into the base without changing the checkout.
 
 A result identical to the base tree makes the branch eligible for deletion.
 A different tree or merge conflict preserves the branch. Deletion uses
-``git branch -D`` because ``-d`` would repeat the ancestry check.
+``git branch -D``, which skips git's merged-branch check.
 
 Make passes the protected base name through ``PRUNE_MAIN_BRANCH``. Only
 ``PRUNE_CONFIRM=1`` enables deletion. Other values report candidates without
@@ -22,7 +21,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 
 # A runner takes the git command vector and returns the completed process.
-# Injectable so tests never touch a real repository.
+# Tests pass a fake runner.
 GitRunner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 MERGE_TREE_HINT = "branch-prune needs git 2.38 or newer for merge-tree --write-tree."
@@ -117,9 +116,8 @@ def merge_tree_error_detail(result: subprocess.CompletedProcess[str]) -> str:
 
 def _resolve_base_tree(base: str, *, runner: GitRunner) -> str | None:
     """Return the base tree id, or print why the prune cannot run and return None."""
-    # Resolve the base before probing for merge-tree support. Both fail the same
-    # way on an old git and on a missing base, so checking capability first would
-    # blame the git version for what is really an unresolvable ref.
+    # Resolves the base before probing merge-tree support, so a missing ref is
+    # reported as a ref error.
     try:
         tree = base_tree(base, runner=runner)
     except RuntimeError as error:
@@ -147,9 +145,8 @@ def _print_branches(heading: str, branches: Sequence[str]) -> None:
 def _delete_branches(branches: Sequence[str], *, runner: GitRunner) -> int:
     """Force-delete each branch and return the exit code.
 
-    Deletion is the destructive step, so a refusal stops the run rather than
-    continuing down the list. git explains itself on stderr, which the caller
-    needs to see to know whether anything was actually removed.
+    Stops at the first git refusal and prints git's stderr, or stdout when stderr
+    is empty.
     """
     for branch in branches:
         result = runner(["branch", "-D", branch])

@@ -1,10 +1,9 @@
 /*
  * Watch for a page that janks while it is otherwise idle.
  *
- * Long frames during processing or a screen render are expected and say
- * nothing about decoration cost, so the caller's isBusy() check filters them
- * out. Repeated long frames while idle mean the running animation is too much
- * for this device, and the caller drops one effects tier for the session.
+ * Long frames seen while isBusy() is true are ignored. Repeated long frames
+ * while idle mean the running animation is too much for this device, and the
+ * caller drops one effects tier for the session.
  */
 
 // Long frames needed inside the window before the page counts as janking.
@@ -20,8 +19,8 @@ export const JANK_WINDOW_MS = 5000;
  * @param {() => void} options.onJank - Called once when the page janks while idle
  * @param {() => Array<{start: number, end: number}>} [options.busySpans] -
  * performance.now() intervals during which the page was busy (end is Infinity
- * while it still is). Entries arrive after their frame, often once the busy
- * state is over, so a frame that overlaps any span is not counted.
+ * while it still is). A frame that overlaps any span is not counted. Entries
+ * can arrive after the busy state has ended.
  * @returns {() => void} Stops watching
  */
 export function watchForJank({ Observer, isBusy, onJank, busySpans = () => [] }) {

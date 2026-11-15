@@ -90,13 +90,8 @@ test("dashboard layout stays bounded and charts redraw across viewport changes",
                 }
                 expect(overflow.vertical, `${route} chart at ${width}px`).toBeLessThanOrEqual(1);
             }
-            // The page must stop growing. Late content, such as a web font
-            // swapping in, can change the height once after the checks above,
-            // so wait for two equal samples rather than comparing against a
-            // snapshot after a fixed sleep. expect.poll samples immediately,
-            // so the first sample only records a height: a pass needs a second
-            // sample one interval later. A redraw loop that keeps resizing the
-            // page never settles, and still fails.
+            // The page height must stop changing. Waits for two equal samples, one interval apart.
+            // A redraw loop that keeps resizing the page never settles and fails.
             /** @type {number|null} */
             let previousHeight = null;
             await expect

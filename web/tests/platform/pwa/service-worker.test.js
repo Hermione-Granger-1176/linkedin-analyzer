@@ -125,9 +125,8 @@ describe("service worker", () => {
         await import("../../../src/sw.js");
         const routing = await import("workbox-routing");
 
-        // The mocked StaleWhileRevalidate returns its options, and the mocked
-        // ExpirationPlugin returns its config, so the bound limits are inspectable.
-        // Locate the route by cacheName rather than registration order.
+        // The mocked strategy and plugin constructors return their options, so the
+        // limits can be read. The route is found by cacheName, not by registration order.
         const staticStrategy = routing.registerRoute.mock.calls
             .map((call) => call[1])
             .find((strategy) => strategy && strategy.cacheName === "static-resources-v1");

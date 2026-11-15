@@ -42,16 +42,13 @@ BLOCK_SCALAR_PATTERN = re.compile(r"^[|>][+-]?\d*$")
 SHELL_CONTROL_FLOW_PATTERN = re.compile(r"^(?:if|for|while|case)\b")
 RECIPE_PREFIX_PATTERN = re.compile(r"^[@\-+]+")
 
-# Targets whose recipes may keep inline shell control flow. Every entry is
-# argument assembly or Git operations. Other logic belongs in scripts/.
-# ``test_control_flow_allowlist_has_no_unused_entries`` fails when a target no
-# longer needs an exception but remains in this list.
+# Targets whose recipes may keep inline shell control flow. Entries are argument
+# assembly or Git operations; other logic belongs in scripts/.
+# ``test_control_flow_allowlist_has_no_unused_entries`` fails when a listed target
+# no longer has inline control flow.
 #
-# Several of these exist *because* of the free-text rule. An optional flag whose
-# value is prose cannot be added with ``$(if $(COMMENT),--comment "$$COMMENT")``,
-# since a Make conditional expands the value and would run ``$(shell ...)`` inside
-# it. Testing in the recipe's shell is the only safe way to append the flag, so
-# the branch is required to avoid expanding prose. See docs/development.md.
+# Several entries test an optional prose value in the recipe's shell, not with a
+# Make conditional such as ``$(if $(COMMENT),...)``.
 CONTROL_FLOW_ALLOWLIST = frozenset(
     {
         "branch",  # pull only when the base branch has an upstream
@@ -98,11 +95,10 @@ class ShellControlFlow:
 def _scan_quote_state(text: str, quote: str | None) -> str | None:
     """Return the quote state after scanning ``text`` from ``quote``.
 
-    Outside a quote, either ``'`` or ``"`` opens a quoted span. While inside a
-    span only the matching quote character closes it, so the other quote is
-    literal until then. Tracking this across backslash-continued recipe lines
-    keeps control-flow keywords inside a quoted program body (for example the
-    ``@awk '...'`` help blocks) from being read as shell control flow.
+    Outside a quote, either ``'`` or ``"`` opens a quoted span. Inside a span,
+    only the matching quote character closes it. The state carries across
+    backslash-continued recipe lines, so keywords inside a quoted program body
+    (such as the ``@awk '...'`` help blocks) are not read as shell control flow.
     """
     for char in text:
         if quote is None:
@@ -120,8 +116,7 @@ def find_shell_control_flow(
 
     Only tab-indented recipe lines are considered. Lines inside ``define ...
     endef`` blocks, variable-assignment continuations, and quoted program bodies
-    are ignored, and allowlisted targets are skipped, so future inline shell
-    logic is pushed into ``scripts/`` instead.
+    are ignored, and allowlisted targets are skipped.
     """
     violations: list[ShellControlFlow] = []
     in_define = False
@@ -229,10 +224,8 @@ def extract_markdown_code_snippets(text: str) -> list[CodeSnippet]:
 def extract_source_code_snippets(text: str) -> list[CodeSnippet]:
     """Extract backticked spans from source comments, docstrings, and strings.
 
-    Source files mix prose with commands, and an unquoted scan would read
-    ordinary English such as "make sure" as a target reference. Backticks are
-    the convention this repository already uses when naming a command inside a
-    string, so they are what marks a span as a real reference.
+    Only backticked spans are scanned, so prose such as "make sure" is not read
+    as a target reference.
     """
     snippets: list[CodeSnippet] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -243,13 +236,11 @@ def extract_source_code_snippets(text: str) -> list[CodeSnippet]:
 def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
     """Extract shell lines from ``run:`` values in any ``.github`` YAML file.
 
-    The whole directory is scanned rather than an enumerated list of workflow
-    and action paths, so a new kind of ``.github`` YAML that runs shell is
-    covered the day it is added. Files without a ``run:`` key return no snippets.
+    Every YAML file under ``.github`` is scanned. Files without a ``run:`` key
+    return no snippets.
 
     A ``run:`` value is shell, so every ``make`` word in it is a real
-    invocation. These are the references that break CI silently when a target
-    is renamed, which is why they are read directly rather than via backticks.
+    invocation. These references are read directly, not through backticks.
     """
     snippets: list[CodeSnippet] = []
     lines = text.splitlines()
@@ -270,9 +261,8 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
             continue
 
         # The block ends at the first key indented no farther than ``run:``
-        # itself. In a `- run: |` step the sequence dash sits left of the key,
-        # so sibling keys such as `shell:` and `env:` are more indented than
-        # the line's leading whitespace and would otherwise be read as shell.
+        # itself. In a `- run: |` step, the dash counts toward key_indent, so
+        # sibling keys such as `shell:` and `env:` end the block.
         key_indent = len(match.group(1)) + len(match.group(2) or "")
         while index < len(lines):
             body = lines[index]
@@ -288,8 +278,8 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
 def is_test_path(relative_path: Path) -> bool:
     """Return whether a repository-relative path holds test code.
 
-    Test files legitimately name targets that do not exist, as fixtures for
-    the checkers themselves, so they are excluded from source scanning.
+    Test files name nonexistent targets as fixtures, so they are excluded from
+    source scanning.
     """
     if any(part in TEST_DIRECTORY_NAMES for part in relative_path.parts):
         return True

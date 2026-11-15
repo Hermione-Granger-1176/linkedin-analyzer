@@ -58,7 +58,7 @@ The release workflow publishes a multi-platform image to GHCR for each stable re
 docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-analyzer:latest all
 ```
 
-The container runs as an unprivileged `app` user. The mounted `data` directory must be writable by that user. See [CLI reference](docs/cli.md) for custom paths and [operations](docs/operations.md) for release details.
+The container runs as an unprivileged `app` user. The mounted `data` directory must be writable by that user. See [CLI reference](docs/cli.md) for custom paths and [operations](docs/operations.md#publish-a-release) for release details.
 
 ## Privacy and storage
 
@@ -68,23 +68,7 @@ Diagnostics use Sentry only when the build contains a DSN and the user opts in. 
 
 ## Documentation
 
-Start with the [documentation index](docs/index.md). The pages are grouped by the task or question they answer:
-
-- [Clean an export](docs/getting-started.md) is the tutorial for a first run.
-- [Web app](docs/web-app.md) describes the browser workflow, screens, exports, limits, and privacy behavior.
-- [CLI reference](docs/cli.md) lists commands, options, input files, output files, and the Python API.
-- [Data formats](docs/data-formats.md) records required columns and cleaner behavior for each export.
-- [Development](docs/development.md) covers setup, dependency changes, local commands, and GitHub helpers.
-- [Testing](docs/testing.md) explains unit, integration, parity, browser, coverage, and benchmark checks.
-- [Project structure](docs/structure.md) maps ownership across the repository.
-- [Web architecture](docs/web-architecture.md) explains routing, workers, persistence, export, and observability decisions.
-- [Operations](docs/operations.md) covers deployment, releases, CI, monitoring, and incident response.
-- [Style guide](docs/style-guide.md) records code and documentation conventions.
-- [Troubleshooting](docs/troubleshooting.md) starts with common setup, upload, test, and deployment failures.
-- [Architecture decision records](docs/adr/README.md) explain decisions that affect the system design.
-- [Contributing](.github/CONTRIBUTING.md) describes the contribution workflow.
-- [Security policy](.github/SECURITY.md) describes private vulnerability reporting.
-- [Changelog](CHANGELOG.md) records Python package changes only.
+Start with the [documentation index](docs/index.md), which maps each question to one page. [Contributing](.github/CONTRIBUTING.md) covers the pull request workflow, the [security policy](.github/SECURITY.md) covers private vulnerability reports, and the [changelog](CHANGELOG.md) lists Python package releases.
 
 ## License
 

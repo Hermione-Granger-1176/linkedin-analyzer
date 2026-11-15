@@ -32,8 +32,8 @@ if TYPE_CHECKING:
     from linkedin_analyzer.core.types import CleanerResult
 
 FIXTURES_DIR = Path(__file__).parents[1] / "fixtures"
-# Cleaned dates are converted from UTC to the local timezone, so parity tests
-# assert the format instead of an exact machine-dependent value.
+# Cleaned dates are converted from UTC to local time. Tests check the format,
+# not a machine-dependent value.
 LOCAL_DATETIME_PATTERN = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"
 
 CORPUS_CLEANERS: dict[str, Callable[..., CleanerResult]] = {
@@ -179,8 +179,7 @@ def test_shares_fixture_matches_expected_python_contract(tmp_path: Path) -> None
     assert result.success is True
     df = pd.read_excel(output_file, dtype=str).fillna("")
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
-    # The impossible date passes through as raw text, which also matches the
-    # pattern above, so pin the exact cell explicitly.
+    # The impossible date passes through as raw text. Assert that exact cell.
     assert df["Date"].iloc[3] == "2026-02-30 10:00:00"
     assert list(df["ShareLink"]) == [
         "https://www.linkedin.com/feed/update/urn:li:share:1",
@@ -194,7 +193,7 @@ def test_shares_fixture_matches_expected_python_contract(tmp_path: Path) -> None
         "Smart “quotes” and naïve emoji 📌 stay intact.",
         "'=SUM(A1:B2)",
         "'@mention leads this",
-        # The BEL control character (\x07) is stripped so the export stays writable.
+        # The BEL control character (\x07) is stripped.
         "Bellchar removed",
     ]
     assert list(df["SharedUrl"]) == ["https://example.com/post", "", "", "", ""]
@@ -219,7 +218,7 @@ def test_comments_fixture_matches_expected_python_contract(tmp_path: Path) -> No
 
     assert result.success is True
     df = pd.read_excel(output_file, dtype=str).fillna("")
-    # The "none" row is dropped (Message required, NONE is a sentinel).
+    # The "none" row is dropped: Message is required and "NONE" counts as missing.
     assert len(df) == 3
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
     assert list(df["Link"]) == [
@@ -248,8 +247,8 @@ def test_messages_fixture_matches_expected_python_contract(tmp_path: Path) -> No
     assert list(df["FROM"]) == ["Ada", "Eve"]
     assert list(df["TO"]) == ["Bob", "Bob"]
     assert df["DATE"].str.match(LOCAL_DATETIME_PATTERN).all()
-    # UTC is stripped, then the impossible date passes through as raw text,
-    # which also matches the pattern above, so pin the exact cell explicitly.
+    # UTC is stripped and the impossible date passes through as raw text.
+    # Assert that exact cell.
     assert df["DATE"].iloc[1] == "2026-02-30 10:00:00"
     assert list(df["CONTENT"]) == ['He said "hello"', "'-2 plus 2"]
     assert list(df["FOLDER"]) == ["INBOX", "ARCHIVE"]
@@ -303,7 +302,6 @@ def test_synthetic_corpus_matches_web_cleaner(file_type: str, tmp_path: Path) ->
     )
 
     assert result.success is True
-    # Read every cell as text so numeric-looking strings are not coerced, then
-    # normalize blanks to "" to match the web cleaner's empty-string cells.
+    # Read every cell as text and map blanks to "", the web cleaner's empty-string value.
     df = pd.read_excel(output_file, dtype=str).fillna("")
     assert df.to_dict(orient="records") == expected

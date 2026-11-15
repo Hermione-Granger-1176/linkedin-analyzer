@@ -124,8 +124,7 @@ describe("InsightsPage", () => {
         await loading;
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Posting would hand the read to a terminated worker and arm a
-        // watchdog over the error the screen is already showing.
+        // The dropped load posts nothing to the terminated worker and arms no watchdog.
         expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
             expect.objectContaining({ type: "initBase" }),
         );
@@ -147,9 +146,8 @@ describe("InsightsPage", () => {
             expect(workerInstance).toBeTruthy();
             expect(workerInstance.listeners.message.length).toBeGreaterThan(0);
 
-            // Regression: without a watchdog a silent worker leaves the loading
-            // overlay up forever. Advancing past the timeout must report an error
-            // and hide the overlay.
+            // A silent worker must not leave the loading overlay up. Advancing past
+            // the timeout reports an error and hides the overlay.
             vi.advanceTimersByTime(30000);
 
             expect(document.getElementById("insightsEmpty").hidden).toBe(false);
@@ -340,8 +338,8 @@ describe("InsightsPage", () => {
         expect(cards[1].querySelector(".insight-body h3").textContent).toBe("Trending Up");
         expect(cards[1].textContent).toContain("Activity is up 42%");
 
-        // The PDF export reads the insight objects, never the cards, so the
-        // published snapshot carries no trace of the stamps.
+        // The PDF export reads the insight objects, not the cards, so the snapshot
+        // has no reaction markup.
         const snapshot = DataCache.set.mock.calls
             .filter((call) => call[0] === INSIGHTS_EXPORT_CACHE_KEY)
             .at(-1)[1];
@@ -445,7 +443,7 @@ describe("InsightsPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(document.getElementById("insightsAllTime").hidden).toBe(true);
 
-        // The error cleared the latch, so a subsequent entry retries and succeeds.
+        // After a storage error, the next entry retries the load.
         Storage.getOutreach.mockResolvedValue({
             selfInitiated: 5,
             replyRate: null,
@@ -768,15 +766,13 @@ describe("InsightsPage", () => {
         const id = await primeInsights("12m");
         sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
 
-        // The positive control for the test below. Without it, a null there
-        // could equally mean the view never reached the snapshot at all, and
-        // deleting the range guard would not fail.
+        // Control for the test below: a view built at the range on screen reaches the snapshot.
         expect(lastSnapshot().view).not.toBeNull();
     });
 
     it("withholds a view built at another range when the outreach read lands first", async () => {
-        // Reenter at a different range while the outreach read resolves before
-        // the new worker view. Publishing must withhold the previous range's view.
+        // Re-enters at a different range while the outreach read resolves before
+        // the worker's view. The previous range's view is withheld.
         const id = await primeInsights("12m");
         sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
         expect(lastSnapshot().view).not.toBeNull();
@@ -793,9 +789,9 @@ describe("InsightsPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const snapshot = lastSnapshot();
-        // Published by the outreach read, with the worker's answer for "3m"
-        // still outstanding. Without the guard the twelve-month timeline goes
-        // out under a three-month caption, which is the bug this shipped once.
+        // Published by the outreach read while the worker's answer for "3m" is
+        // still outstanding, so the view is withheld. Without that check, the
+        // twelve-month timeline would be published under a three-month caption.
         expect(snapshot.timeRange).toBe("3m");
         expect(snapshot.outreach).not.toBeNull();
         expect(snapshot.view).toBeNull();

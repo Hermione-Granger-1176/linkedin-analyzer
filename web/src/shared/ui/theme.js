@@ -16,11 +16,9 @@ export const Theme = (() => {
         const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const theme = savedTheme || (systemPrefersDark ? "dark" : "light");
         applyTheme(theme);
-        // The document ships marked light, and what it settles on here may not
-        // be. Announcing it either way lets theme-derived canvases (the
-        // background doodles) paint the palette that actually applied instead of
-        // keeping the one they read before this ran. The boot flag is how a
-        // listener tells this apart from a visitor reaching for the switch.
+        // The document ships marked light, so the theme applied here can differ.
+        // Always announce it, so theme-derived canvases repaint with the palette
+        // in effect. Listeners read detail.boot to tell this from a user toggle.
         notifyThemeChange(true);
 
         toggle.addEventListener("click", () => {

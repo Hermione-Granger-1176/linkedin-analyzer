@@ -1,11 +1,10 @@
 """Shared failure classification and retry backoff for GitHub CLI calls.
 
-Keeping the retry decisions here rather than in one caller means every ``gh``
-wrapper shares the same rules: rate limits always fail fast, transient
-infrastructure failures can retry, and all other errors are final.
-``scripts.gh.gh_runner`` uses this module; CI workflow helpers can use it when
-they gain a ``gh api`` wrapper of their own. A blocked GraphQL endpoint is its
-own kind, so the interactive wrappers can switch to REST instead of retrying.
+Every ``gh`` wrapper uses the same rules: rate limits fail fast, transient
+infrastructure failures retry, and all other errors are final. A blocked GraphQL
+endpoint has its own failure kind, so interactive wrappers switch to REST instead
+of retrying. ``scripts.gh.gh_runner`` uses this module, and CI workflow helpers
+can use it for a ``gh api`` wrapper.
 """
 
 from __future__ import annotations
@@ -18,19 +17,17 @@ from typing import Literal
 GhFailureKind = Literal["graphql_unavailable", "rate_limit", "transient", "forbidden", "fatal"]
 RandomFunction = Callable[[], float]
 
-# Rules are checked in order. A blocked GraphQL endpoint answers with an HTTP 403
-# whose text names the REST routes to use instead, so it is matched on that text
-# before any rule that reads the status code. A rate-limit message can also
-# mention HTTP 403, so it must win before the permission-specific rule.
+# Rules are checked in order. A blocked GraphQL endpoint returns HTTP 403 with
+# text that names the REST routes to use, so the GraphQL rule matches that text
+# first. A rate-limit message can also mention HTTP 403, so the rate-limit rule
+# matches before the forbidden rule.
 GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
     ("graphql_unavailable", re.compile(r"GraphQL is not available", re.IGNORECASE)),
     (
         "rate_limit",
         re.compile(
-            # 429 needs the same HTTP anchoring as the server codes below: a bare
-            # ``429`` also appears in run numbers and line numbers, and a false
-            # rate-limit verdict aborts with a misleading "wait for the window
-            # to reset" message instead of surfacing the real failure.
+            # 429 matches only in its HTTP-anchored forms, like the server codes
+            # below. A bare 429 also appears in run and line numbers.
             r"rate limit|submitted too quickly|abuse detection|secondary rate|"
             r"\bHTTP 429\b|\b429 too many requests\b",
             re.IGNORECASE,
@@ -39,12 +36,11 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
     (
         "transient",
         re.compile(
-            # Retry 500, 502, 503, and 504: GitHub returns these for overloaded
-            # or proxy-layer failures that usually clear. 501 is excluded on
-            # purpose, because "Not Implemented" never becomes available by
-            # retrying. Codes only count when the message marks them as an HTTP
-            # status or pairs them with their reason phrase; a bare ``502`` would
-            # also match line numbers, object ids, and byte counts.
+            # Retries 500, 502, 503, and 504, which GitHub returns for overloaded
+            # or proxy-layer failures. 501 is not retried. Status codes match only
+            # when the message marks them as an HTTP status or pairs them with
+            # their reason phrase, so bare numbers in line numbers, object ids, and
+            # byte counts do not match.
             r"\bHTTP 50[0234]\b|"
             r"\b50[0234] (?:internal server error|bad gateway|"
             r"service unavailable|gateway time-?out)\b|"
@@ -58,9 +54,7 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
 )
 
 # Idempotent GitHub calls get two retries. The delay grows exponentially and
-# includes bounded jitter so concurrent workflows do not retry in lockstep. The
-# 1.0s base keeps the first retry a full second out, matching the backoff the
-# gh wrappers used before this policy was extracted.
+# includes bounded jitter. The first retry waits at least one second.
 DEFAULT_GH_RETRIES = 2
 RETRY_BACKOFF_BASE_SECONDS = 1.0
 RETRY_BACKOFF_CAP_SECONDS = 8.0

@@ -1,12 +1,5 @@
 {
   "npm_override_dev_dependencies": [],
-  "npm_vulnerability_exceptions": [
-    {
-      "id": "GHSA-gcqx-w48m-w2h4",
-      "package": "deepmerge",
-      "reason": "No patched deepmerge release exists. It is a build-time dev dependency of @sveltejs/vite-plugin-svelte and workbox-build that merges repository-owned config, never user input, and is not shipped to the browser. The only npm-suggested fix downgrades vite-plugin-pwa to 1.1.0.",
-      "review_by": "2027-02-01"
-    }
-  ],
+  "npm_vulnerability_exceptions": [],
   "python_vulnerability_exceptions": []
 }
